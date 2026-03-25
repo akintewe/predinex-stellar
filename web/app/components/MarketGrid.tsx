@@ -3,6 +3,7 @@
 import { RefreshCw, AlertCircle, Search } from 'lucide-react';
 import MarketCard from './MarketCard';
 import { ProcessedMarket } from '../lib/market-types';
+import Link from 'next/link';
 
 interface MarketGridProps {
   markets: ProcessedMarket[];
@@ -77,13 +78,13 @@ export default function MarketGrid({
                 There are no prediction markets available yet. Be the first to create one!
               </p>
             </div>
-            <a
+            <Link
               href="/create"
               className="px-4 py-2 bg-primary text-primary-foreground rounded-lg 
                        hover:bg-primary/90 transition-colors duration-200"
             >
               Create Market
-            </a>
+            </Link>
           </div>
         </div>
       </div>
@@ -116,13 +117,13 @@ export default function MarketGrid({
               >
                 Clear Filters
               </button>
-              <a
+              <Link
                 href="/create"
                 className="px-4 py-2 bg-primary text-primary-foreground rounded-lg 
                          hover:bg-primary/90 transition-colors duration-200"
               >
                 Create Market
-              </a>
+              </Link>
             </div>
           </div>
         </div>

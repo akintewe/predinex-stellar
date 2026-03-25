@@ -15,6 +15,7 @@ export default function MarketsPage() {
     paginatedMarkets,
     isLoading,
     error,
+    blockHeightWarning,
     filters,
     pagination,
     setSearch,
@@ -52,7 +53,7 @@ export default function MarketsPage() {
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-2">Prediction Markets</h1>
           <p className="text-muted-foreground">
-            Discover and participate in decentralized prediction markets on Stacks
+            Discover and participate in decentralized prediction markets on Stellar
           </p>
         </div>
 
@@ -94,6 +95,17 @@ export default function MarketsPage() {
             </div>
           </div>
         </div>
+
+        {/* Non-blocking freshness warning */}
+        {blockHeightWarning && (
+          <div
+            className="mb-6 rounded-xl border border-yellow-500/20 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-200"
+            role="status"
+            aria-live="polite"
+          >
+            {blockHeightWarning}
+          </div>
+        )}
 
         {/* Markets Grid */}
         <MarketGrid

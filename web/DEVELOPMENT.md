@@ -6,7 +6,7 @@ This document provides instructions for developers looking to contribute to the 
 
 - **Node.js**: v18 or higher
 - **npm**: v8 or higher
-- **Wallet**: Leather or Xverse (for testing interactions)
+- **Wallet**: [Freighter](https://www.freighter.app/) (for testing Stellar interactions)
 
 ## Getting Started
 

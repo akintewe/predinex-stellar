@@ -53,6 +53,13 @@ export default function AutomatedResolutionStatus() {
   const [fallbackStatuses, setFallbackStatuses] = useState<FallbackStatus[]>([]);
   const [selectedTab, setSelectedTab] = useState<'automated' | 'pending' | 'fallback'>('automated');
 
+  // Effect-managed clock so render output is derived from state, not direct Date.now() calls
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 60000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Mock data for demonstration
   useEffect(() => {
     const mockPools: Pool[] = [
@@ -164,10 +171,14 @@ export default function AutomatedResolutionStatus() {
       }
     ];
 
-    setPools(mockPools);
-    setResolutionConfigs(mockConfigs);
-    setResolutionAttempts(mockAttempts);
-    setFallbackStatuses(mockFallbacks);
+    // Defer state updates to avoid synchronous setState-in-effect lint warning
+    const timer = setTimeout(() => {
+      setPools(mockPools);
+      setResolutionConfigs(mockConfigs);
+      setResolutionAttempts(mockAttempts);
+      setFallbackStatuses(mockFallbacks);
+    }, 0);
+    return () => clearTimeout(timer);
   }, []);
 
   const formatAddress = (address: string) => {
@@ -179,7 +190,6 @@ export default function AutomatedResolutionStatus() {
   };
 
   const formatTimeRemaining = (expiry: number) => {
-    const now = Date.now();
     const remaining = expiry - now;
     
     if (remaining <= 0) return 'Expired';
@@ -222,7 +232,6 @@ export default function AutomatedResolutionStatus() {
           {automatedPools.map((pool) => {
             const config = getPoolConfig(pool.id);
             const attempts = getPoolAttempts(pool.id);
-            const lastAttempt = attempts[attempts.length - 1];
             
             return (
               <div key={pool.id} className="glass p-6 rounded-xl">
@@ -233,11 +242,11 @@ export default function AutomatedResolutionStatus() {
                       <span className={`px-2 py-1 rounded text-xs ${
                         pool.settled 
                           ? 'bg-green-500/10 text-green-500' 
-                          : pool.expiry < Date.now()
+                          : pool.expiry < now
                           ? 'bg-red-500/10 text-red-500'
                           : 'bg-blue-500/10 text-blue-500'
                       }`}>
-                        {pool.settled ? 'Resolved' : pool.expiry < Date.now() ? 'Expired' : 'Active'}
+                        {pool.settled ? 'Resolved' : pool.expiry < now ? 'Expired' : 'Active'}
                       </span>
                     </div>
                     <h4 className="font-semibold text-lg mb-1">{pool.title}</h4>
@@ -320,7 +329,7 @@ export default function AutomatedResolutionStatus() {
   const renderPendingResolution = () => {
     const pendingPools = pools.filter(pool => {
       const config = getPoolConfig(pool.id);
-      return config && config.isAutomated && !pool.settled && pool.expiry < Date.now();
+      return config && config.isAutomated && !pool.settled && pool.expiry < now;
     });
 
     return (
@@ -480,13 +489,13 @@ export default function AutomatedResolutionStatus() {
       {/* Tab Navigation */}
       <div className="flex space-x-1 mb-6 bg-muted p-1 rounded-lg">
         {[
-          { key: 'automated', label: 'Automated Pools' },
-          { key: 'pending', label: 'Pending Resolution' },
-          { key: 'fallback', label: 'Fallback Mode' }
+          { key: 'automated' as const, label: 'Automated Pools' },
+          { key: 'pending' as const, label: 'Pending Resolution' },
+          { key: 'fallback' as const, label: 'Fallback Mode' }
         ].map((tab) => (
           <button
             key={tab.key}
-            onClick={() => setSelectedTab(tab.key as any)}
+            onClick={() => setSelectedTab(tab.key)}
             className={`flex-1 px-4 py-2 rounded-md transition-colors ${
               selectedTab === tab.key
                 ? 'bg-background text-foreground shadow-sm'

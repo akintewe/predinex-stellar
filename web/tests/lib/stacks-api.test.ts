@@ -3,6 +3,24 @@ import { fetchCallReadOnlyFunction, cvToValue } from '@stacks/transactions';
 import { getPoolCount, getPool, fetchActivePools, getUserBet } from '../../app/lib/stacks-api';
 import { uintCV } from '@stacks/transactions';
 
+// Mock runtime-config so tests don't require NEXT_PUBLIC_NETWORK env var
+vi.mock('../../app/lib/runtime-config', () => ({
+  getRuntimeConfig: vi.fn(() => ({
+    network: 'testnet',
+    contract: {
+      address: 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM',
+      name: 'predinex-pool',
+      id: 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.predinex-pool',
+    },
+    api: {
+      coreApiUrl: 'https://api.testnet.hiro.so',
+      explorerUrl: 'https://explorer.hiro.so?chain=testnet',
+      rpcUrl: 'https://api.testnet.hiro.so',
+    },
+  })),
+  __resetRuntimeConfigForTests: vi.fn(),
+}));
+
 // Mock @stacks/transactions
 vi.mock('@stacks/transactions', async () => {
   const actual = await vi.importActual('@stacks/transactions');
@@ -116,18 +134,18 @@ describe('stacks-api', () => {
       } as any);
       vi.mocked(cvToValue).mockReturnValueOnce(3);
 
-      // Mock getPool calls
+      // Mock getPool calls - cvToValue(result, true) returns plain readable values
       const mockPoolData = {
         title: 'Pool 0',
         description: 'Desc',
         creator: 'ST123',
         'outcome-a-name': 'A',
         'outcome-b-name': 'B',
-        'total-a': { type: 1, value: 1000000n },
-        'total-b': { type: 1, value: 2000000n },
-        settled: { type: 3, value: false },
-        'winning-outcome': { type: 0, value: null },
-        expiry: { type: 1, value: 1000n },
+        'total-a': 1000000n,
+        'total-b': 2000000n,
+        settled: false,
+        'winning-outcome': null,
+        expiry: 1000n,
       };
 
       vi.mocked(fetchCallReadOnlyFunction).mockResolvedValue({

@@ -1,23 +1,46 @@
 // Enhanced Stacks API integration for Market Discovery System
 
-import { STACKS_MAINNET, StacksNetwork } from "@stacks/network";
+import { STACKS_MAINNET, STACKS_TESTNET, StacksNetwork } from "@stacks/network";
 import { fetchCallReadOnlyFunction, cvToValue, uintCV } from "@stacks/transactions";
-import { CONTRACT_ADDRESS, CONTRACT_NAME } from "./constants";
 import { PoolData } from "./market-types";
+import { getRuntimeConfig } from "./runtime-config";
 
-const network: StacksNetwork = STACKS_MAINNET;
+let didLogMarketDiscoveryNetwork = false;
+
+function getStacksNetwork(): StacksNetwork {
+  const { network } = getRuntimeConfig();
+  return network === 'testnet' ? STACKS_TESTNET : STACKS_MAINNET;
+}
+
+function logMarketDiscoveryNetworkOnce(): void {
+  if (didLogMarketDiscoveryNetwork) return;
+  didLogMarketDiscoveryNetwork = true;
+
+  try {
+    const cfg = getRuntimeConfig();
+    const stacksNetwork = getStacksNetwork();
+    console.info(
+      `[market-discovery] network=${cfg.network} stacksApiBaseUrl=${stacksNetwork.client.baseUrl} contract=${cfg.contract.id}`
+    );
+  } catch (e) {
+    // If config is invalid/missing, fail-fast will throw elsewhere; avoid masking it here.
+  }
+}
 
 /**
  * Get total number of pools from the contract
  */
 export async function getPoolCount(): Promise<number> {
   try {
+    logMarketDiscoveryNetworkOnce();
+    const cfg = getRuntimeConfig();
+    const network = getStacksNetwork();
     const result = await fetchCallReadOnlyFunction({
-      contractAddress: CONTRACT_ADDRESS,
-      contractName: CONTRACT_NAME,
+      contractAddress: cfg.contract.address,
+      contractName: cfg.contract.name,
       functionName: 'get-pool-count',
       functionArgs: [],
-      senderAddress: CONTRACT_ADDRESS,
+      senderAddress: cfg.contract.address,
       network,
     });
 
@@ -34,12 +57,15 @@ export async function getPoolCount(): Promise<number> {
  */
 export async function getEnhancedPool(poolId: number): Promise<PoolData | null> {
   try {
+    logMarketDiscoveryNetworkOnce();
+    const cfg = getRuntimeConfig();
+    const network = getStacksNetwork();
     const result = await fetchCallReadOnlyFunction({
-      contractAddress: CONTRACT_ADDRESS,
-      contractName: CONTRACT_NAME,
+      contractAddress: cfg.contract.address,
+      contractName: cfg.contract.name,
       functionName: 'get-pool',
       functionArgs: [uintCV(poolId)],
-      senderAddress: CONTRACT_ADDRESS,
+      senderAddress: cfg.contract.address,
       network,
     });
 
@@ -72,13 +98,16 @@ export async function getEnhancedPool(poolId: number): Promise<PoolData | null> 
  */
 export async function getPoolsBatch(startId: number, count: number): Promise<PoolData[]> {
   try {
+    logMarketDiscoveryNetworkOnce();
+    const cfg = getRuntimeConfig();
+    const network = getStacksNetwork();
     // Try to use the batch function if available
     const result = await fetchCallReadOnlyFunction({
-      contractAddress: CONTRACT_ADDRESS,
-      contractName: CONTRACT_NAME,
+      contractAddress: cfg.contract.address,
+      contractName: cfg.contract.name,
       functionName: 'get-pools-batch',
       functionArgs: [uintCV(startId), uintCV(count)],
-      senderAddress: CONTRACT_ADDRESS,
+      senderAddress: cfg.contract.address,
       network,
     });
 
@@ -168,12 +197,15 @@ export async function getPoolStats(poolId: number): Promise<{
   percentageB: number;
 } | null> {
   try {
+    logMarketDiscoveryNetworkOnce();
+    const cfg = getRuntimeConfig();
+    const network = getStacksNetwork();
     const result = await fetchCallReadOnlyFunction({
-      contractAddress: CONTRACT_ADDRESS,
-      contractName: CONTRACT_NAME,
+      contractAddress: cfg.contract.address,
+      contractName: cfg.contract.name,
       functionName: 'get-pool-stats',
       functionArgs: [uintCV(poolId)],
-      senderAddress: CONTRACT_ADDRESS,
+      senderAddress: cfg.contract.address,
       network,
     });
 

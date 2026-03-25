@@ -1,6 +1,7 @@
 'use client';
 
-import { memo } from 'react';
+import { memo, useState, useEffect } from 'react';
+import Link from 'next/link';
 import {
     Trophy, Target, PlusCircle, Zap,
     ExternalLink, RefreshCw, TrendingUp, Clock
@@ -9,8 +10,8 @@ import { ActivityItem } from '../lib/stacks-api';
 
 // --- Helpers ---
 
-function timeAgo(timestamp: number): string {
-    const seconds = Math.floor(Date.now() / 1000) - timestamp;
+function timeAgo(timestamp: number, nowSeconds: number): string {
+    const seconds = nowSeconds - timestamp;
     if (seconds < 60) return 'Just now';
     const minutes = Math.floor(seconds / 60);
     if (minutes < 60) return `${minutes}m ago`;
@@ -99,25 +100,25 @@ function EmptyState() {
             <p className="text-muted-foreground max-w-sm mb-6">
                 Your on-chain activity with Predinex will appear here once you start predicting.
             </p>
-            <a
+            <Link
                 href="/markets"
                 className="px-6 py-3 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-all hover:scale-105 active:scale-95"
             >
                 Explore Markets
-            </a>
+            </Link>
         </div>
     );
 }
 
 // --- Activity Row ---
 
-const ActivityRow = memo(function ActivityRow({ item }: { item: ActivityItem }) {
+const ActivityRow = memo(function ActivityRow({ item, nowSeconds }: { item: ActivityItem; nowSeconds: number }) {
     const config = TYPE_CONFIG[item.type];
     const Icon = config.icon;
 
     const getEventLabel = () => {
         if (!item.event) return null;
-        
+
         switch (item.event.type) {
             case 'bet':
                 return `Bet on ${item.event.outcome === 0 ? 'Outcome A' : 'Outcome B'}`;
@@ -168,14 +169,14 @@ const ActivityRow = memo(function ActivityRow({ item }: { item: ActivityItem }) 
             <div className="flex-shrink-0 flex items-center gap-3">
                 <div className="flex items-center gap-1.5 text-muted-foreground text-xs">
                     <Clock className="w-3 h-3" />
-                    <span>{timeAgo(item.timestamp)}</span>
+                    <span>{timeAgo(item.timestamp, nowSeconds)}</span>
                 </div>
                 <a
                     href={item.explorerUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="p-2 rounded-lg bg-muted/40 hover:bg-primary hover:text-white transition-all opacity-0 group-hover:opacity-100"
-                    aria-label="View on Stacks Explorer"
+                    aria-label="View on Stellar Explorer"
                     onClick={(e) => e.stopPropagation()}
                 >
                     <ExternalLink className="w-3.5 h-3.5" />
@@ -208,6 +209,13 @@ const ActivityFeed = memo(function ActivityFeed({
     showHeader = true,
 }: ActivityFeedProps) {
     const displayItems = limit ? activities.slice(0, limit) : activities;
+
+    // Effect-managed timer so render output is derived from state, not direct Date.now() calls
+    const [nowSeconds, setNowSeconds] = useState(() => Math.floor(Date.now() / 1000));
+    useEffect(() => {
+        const interval = setInterval(() => setNowSeconds(Math.floor(Date.now() / 1000)), 30000);
+        return () => clearInterval(interval);
+    }, []);
 
     return (
         <div className="w-full">
@@ -243,20 +251,20 @@ const ActivityFeed = memo(function ActivityFeed({
             ) : (
                 <div className="space-y-3" role="list" aria-label="Activity feed">
                     {displayItems.map((item) => (
-                        <ActivityRow key={item.txId} item={item} />
+                        <ActivityRow key={item.txId} item={item} nowSeconds={nowSeconds} />
                     ))}
                 </div>
             )}
 
             {limit && activities.length > limit && (
                 <div className="text-center mt-6">
-                    <a
+                    <Link
                         href="/activity"
                         className="inline-flex items-center gap-2 text-primary font-bold hover:underline text-sm"
                     >
                         View All Activity
                         <ExternalLink className="w-3.5 h-3.5" />
-                    </a>
+                    </Link>
                 </div>
             )}
         </div>
