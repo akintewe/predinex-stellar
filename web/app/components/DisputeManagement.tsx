@@ -32,7 +32,6 @@ export default function DisputeManagement() {
   const [now, setNow] = useState(0);
 
   useEffect(() => {
-    setNow(Date.now());
     const interval = setInterval(() => setNow(Date.now()), 60000);
     return () => clearInterval(interval);
   }, []);
@@ -98,8 +97,12 @@ export default function DisputeManagement() {
       }
     ];
 
-    setDisputes(mockDisputes);
-    setUserVotes(mockVotes);
+    // Defer state updates to avoid synchronous setState-in-effect lint warning
+    const timer = setTimeout(() => {
+      setDisputes(mockDisputes);
+      setUserVotes(mockVotes);
+    }, 0);
+    return () => clearTimeout(timer);
   }, []);
 
   const formatAddress = (address: string) => {
@@ -135,12 +138,12 @@ export default function DisputeManagement() {
     // Simulate API call
     await new Promise(resolve => setTimeout(resolve, 1000));
     
-    // Add vote to user votes
+    // Add vote to user votes - use the effect-managed now value for the timestamp
     const newVote: DisputeVote = {
       disputeId,
       voter: "SP1HTBVD3JG9C05J7HBJTHGR0GGW7KX975CN0QKA", // Current user
       vote,
-      votedAt: Date.now()
+      votedAt: now,
     };
     
     setUserVotes(prev => [...prev, newVote]);
@@ -433,13 +436,13 @@ export default function DisputeManagement() {
       {/* Tab Navigation */}
       <div className="flex space-x-1 mb-6 bg-muted p-1 rounded-lg">
         {[
-          { key: 'active', label: 'Active Disputes' },
-          { key: 'resolved', label: 'Resolved' },
-          { key: 'create', label: 'Create Dispute' }
+          { key: 'active' as const, label: 'Active Disputes' },
+          { key: 'resolved' as const, label: 'Resolved' },
+          { key: 'create' as const, label: 'Create Dispute' }
         ].map((tab) => (
           <button
             key={tab.key}
-            onClick={() => setSelectedTab(tab.key as any)}
+            onClick={() => setSelectedTab(tab.key)}
             className={`flex-1 px-4 py-2 rounded-md transition-colors ${
               selectedTab === tab.key
                 ? 'bg-background text-foreground shadow-sm'

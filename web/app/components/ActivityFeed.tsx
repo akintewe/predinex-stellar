@@ -1,6 +1,7 @@
 'use client';
 
 import { memo, useState, useEffect } from 'react';
+import Link from 'next/link';
 import {
     Trophy, Target, PlusCircle, Zap,
     ExternalLink, RefreshCw, TrendingUp, Clock
@@ -99,12 +100,12 @@ function EmptyState() {
             <p className="text-muted-foreground max-w-sm mb-6">
                 Your on-chain activity with Predinex will appear here once you start predicting.
             </p>
-            <a
+            <Link
                 href="/markets"
                 className="px-6 py-3 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-all hover:scale-105 active:scale-95"
             >
                 Explore Markets
-            </a>
+            </Link>
         </div>
     );
 }

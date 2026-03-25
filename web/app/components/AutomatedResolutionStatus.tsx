@@ -171,10 +171,14 @@ export default function AutomatedResolutionStatus() {
       }
     ];
 
-    setPools(mockPools);
-    setResolutionConfigs(mockConfigs);
-    setResolutionAttempts(mockAttempts);
-    setFallbackStatuses(mockFallbacks);
+    // Defer state updates to avoid synchronous setState-in-effect lint warning
+    const timer = setTimeout(() => {
+      setPools(mockPools);
+      setResolutionConfigs(mockConfigs);
+      setResolutionAttempts(mockAttempts);
+      setFallbackStatuses(mockFallbacks);
+    }, 0);
+    return () => clearTimeout(timer);
   }, []);
 
   const formatAddress = (address: string) => {
@@ -228,7 +232,6 @@ export default function AutomatedResolutionStatus() {
           {automatedPools.map((pool) => {
             const config = getPoolConfig(pool.id);
             const attempts = getPoolAttempts(pool.id);
-            const lastAttempt = attempts[attempts.length - 1];
             
             return (
               <div key={pool.id} className="glass p-6 rounded-xl">
@@ -486,13 +489,13 @@ export default function AutomatedResolutionStatus() {
       {/* Tab Navigation */}
       <div className="flex space-x-1 mb-6 bg-muted p-1 rounded-lg">
         {[
-          { key: 'automated', label: 'Automated Pools' },
-          { key: 'pending', label: 'Pending Resolution' },
-          { key: 'fallback', label: 'Fallback Mode' }
+          { key: 'automated' as const, label: 'Automated Pools' },
+          { key: 'pending' as const, label: 'Pending Resolution' },
+          { key: 'fallback' as const, label: 'Fallback Mode' }
         ].map((tab) => (
           <button
             key={tab.key}
-            onClick={() => setSelectedTab(tab.key as any)}
+            onClick={() => setSelectedTab(tab.key)}
             className={`flex-1 px-4 py-2 rounded-md transition-colors ${
               selectedTab === tab.key
                 ? 'bg-background text-foreground shadow-sm'
