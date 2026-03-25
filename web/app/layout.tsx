@@ -4,6 +4,7 @@ import "./globals.css";
 import { StacksProvider } from "./components/StacksProvider";
 import { ToastProvider } from "../providers/ToastProvider";
 import Footer from "./components/Footer";
+import MarketListPreloader from "./components/MarketListPreloader";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -54,6 +55,7 @@ export default function RootLayout({
       >
         <StacksProvider>
           <ToastProvider>
+            <MarketListPreloader />
             {children}
             <Footer />
           </ToastProvider>

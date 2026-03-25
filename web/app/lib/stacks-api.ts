@@ -174,6 +174,15 @@ export async function getUserBet(poolId: number, userAddress: string): Promise<U
 
 // --- Activity Feed ---
 
+export interface ActivityEvent {
+    type: 'bet' | 'pool-creation' | 'settlement' | 'claim';
+    poolId?: number;
+    poolTitle?: string;
+    amount?: number;
+    outcome?: string;
+    winnerAmount?: number;
+}
+
 export interface ActivityItem {
     txId: string;
     type: 'bet-placed' | 'winnings-claimed' | 'pool-created' | 'contract-call';
@@ -182,13 +191,81 @@ export interface ActivityItem {
     status: 'success' | 'pending' | 'failed';
     amount?: number;
     poolId?: number;
+    poolTitle?: string;
     explorerUrl: string;
+    event?: ActivityEvent;
+}
+
+function parseContractEvents(tx: any): ActivityEvent | undefined {
+    const events = tx.events || [];
+    
+    for (const event of events) {
+        if (event.type === 'smart_contract_event') {
+            const eventData = event.smart_contract_event;
+            const eventName = eventData?.event_name;
+            
+            if (eventName === 'bet-placed') {
+                const parsed = eventData?.event_data || {};
+                return {
+                    type: 'bet',
+                    poolId: parsed.pool_id,
+                    amount: parsed.amount,
+                    outcome: parsed.outcome,
+                };
+            }
+            
+            if (eventName === 'pool-created') {
+                const parsed = eventData?.event_data || {};
+                return {
+                    type: 'pool-creation',
+                    poolId: parsed.pool_id,
+                    poolTitle: parsed.title,
+                };
+            }
+            
+            if (eventName === 'pool-settled') {
+                const parsed = eventData?.event_data || {};
+                return {
+                    type: 'settlement',
+                    poolId: parsed.pool_id,
+                    outcome: parsed.winning_outcome,
+                };
+            }
+            
+            if (eventName === 'winnings-claimed') {
+                const parsed = eventData?.event_data || {};
+                return {
+                    type: 'claim',
+                    poolId: parsed.pool_id,
+                    winnerAmount: parsed.amount,
+                };
+            }
+        }
+    }
+    
+    return undefined;
+}
+
+function extractPoolInfo(args: any[]): { amount?: number; poolId?: number } {
+    let amount: number | undefined;
+    let poolId: number | undefined;
+
+    for (const arg of args) {
+        if (arg.name === 'amount' && arg.repr) {
+            amount = Number(arg.repr.replace('u', ''));
+        }
+        if (arg.name === 'pool-id' && arg.repr) {
+            poolId = Number(arg.repr.replace('u', ''));
+        }
+    }
+    
+    return { amount, poolId };
 }
 
 /**
  * Fetches recent on-chain activity for a user address by querying the
  * Stacks blockchain API for contract-call transactions targeting the
- * Predinex contract.
+ * Predinex contract. Uses contract events when available for richer data.
  */
 export async function getUserActivity(
     userAddress: string,
@@ -218,8 +295,7 @@ export async function getUserActivity(
         const data = await response.json();
         const results: StacksTransaction[] = data.results || [];
 
-        // Filter to only Predinex contract interactions
-        const predinexTxs = results.filter((tx) => {
+        const predinexTxs = results.filter((tx: any) => {
             const callInfo = tx.contract_call;
             if (!callInfo) return false;
             return callInfo.contract_id?.includes(CONTRACT_ADDRESS);
@@ -241,7 +317,7 @@ export async function getUserActivity(
             // Extract amount from function args if available
             let amount: number | undefined;
             let poolId: number | undefined;
-            const args = callInfo?.function_args || [];
+            const args: any[] = callInfo?.function_args || [];
 
             for (const arg of args) {
                 if (arg.name === 'amount' && arg.repr) {
@@ -258,9 +334,11 @@ export async function getUserActivity(
                 functionName: fnName,
                 timestamp: tx.burn_block_time || Math.floor(Date.now() / 1000),
                 status,
-                amount,
-                poolId,
+                amount: event?.amount || event?.winnerAmount || amount,
+                poolId: event?.poolId || poolId,
+                poolTitle: event?.poolTitle,
                 explorerUrl: `${explorerBase}/txid/${tx.tx_id}`,
+                event,
             };
         });
     } catch (e) {

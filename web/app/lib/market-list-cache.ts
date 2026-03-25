@@ -1,0 +1,122 @@
+import type { ProcessedMarket } from './market-types';
+import { fetchAllPools } from './enhanced-stacks-api';
+import { processMarketData, getCurrentBlockHeight } from './market-utils';
+
+/**
+ * Client-side cache for the markets list to make the first paint faster.
+ *
+ * Cache strategy (freshness & invalidation):
+ * - Stored in `localStorage` as a JSON payload with:
+ *   - `version` (to invalidate schema changes)
+ *   - `cachedAt` timestamp
+ *   - `markets` array
+ * - Entry is considered fresh for `MARKET_LIST_CACHE_TTL_MS`.
+ * - If the entry is stale or the version mismatches, it is removed and the UI
+ *   falls back to live fetching (showing the loading state).
+ *
+ * Deployment compatibility note:
+ * - This cache is per-browser (and per-user), so it works regardless of server
+ *   deployment model and still improves perceived first render time.
+ */
+export const MARKET_LIST_CACHE_KEY = 'predinex_market_list_v1';
+export const MARKET_LIST_CACHE_VERSION = 1;
+export const MARKET_LIST_CACHE_TTL_MS = 30_000;
+
+type MarketListCachePayload = {
+  version: number;
+  cachedAt: number;
+  markets: ProcessedMarket[];
+};
+
+let inFlightWarmPromise: Promise<ProcessedMarket[]> | null = null;
+
+export function clearMarketListCache(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(MARKET_LIST_CACHE_KEY);
+  } catch {
+    // Non-fatal: cache is best-effort.
+  }
+}
+
+export function readMarketListCache(now: number = Date.now()): {
+  markets: ProcessedMarket[];
+  isFresh: boolean;
+} {
+  if (typeof window === 'undefined') return { markets: [], isFresh: false };
+
+  const raw = window.localStorage.getItem(MARKET_LIST_CACHE_KEY);
+  if (!raw) return { markets: [], isFresh: false };
+
+  try {
+    const parsed = JSON.parse(raw) as Partial<MarketListCachePayload>;
+
+    if (parsed.version !== MARKET_LIST_CACHE_VERSION) {
+      clearMarketListCache();
+      return { markets: [], isFresh: false };
+    }
+
+    if (typeof parsed.cachedAt !== 'number' || !Array.isArray(parsed.markets)) {
+      clearMarketListCache();
+      return { markets: [], isFresh: false };
+    }
+
+    const ageMs = now - parsed.cachedAt;
+    if (!Number.isFinite(ageMs) || ageMs < 0 || ageMs > MARKET_LIST_CACHE_TTL_MS) {
+      clearMarketListCache();
+      return { markets: [], isFresh: false };
+    }
+
+    return { markets: parsed.markets as ProcessedMarket[], isFresh: true };
+  } catch {
+    clearMarketListCache();
+    return { markets: [], isFresh: false };
+  }
+}
+
+export function writeMarketListCache(markets: ProcessedMarket[], now: number = Date.now()): void {
+  if (typeof window === 'undefined') return;
+
+  const payload: MarketListCachePayload = {
+    version: MARKET_LIST_CACHE_VERSION,
+    cachedAt: now,
+    markets
+  };
+
+  try {
+    window.localStorage.setItem(MARKET_LIST_CACHE_KEY, JSON.stringify(payload));
+  } catch {
+    // Non-fatal: cache is best-effort.
+  }
+}
+
+/**
+ * Warms the cache by fetching + processing markets, but:
+ * - immediately returns cached markets if the cache is still fresh
+ * - dedupes concurrent warmups via an in-flight promise
+ *
+ * If the cache is stale/missing, this will call the contract read functions.
+ */
+export async function warmMarketListCache(): Promise<ProcessedMarket[]> {
+  const cached = readMarketListCache();
+  if (cached.isFresh) return cached.markets;
+
+  if (inFlightWarmPromise) return inFlightWarmPromise;
+
+  inFlightWarmPromise = (async () => {
+    const poolsData = await fetchAllPools();
+    const currentBlockHeight = getCurrentBlockHeight();
+    const processedMarkets = poolsData.map(pool =>
+      processMarketData(pool, currentBlockHeight)
+    );
+    writeMarketListCache(processedMarkets);
+    return processedMarkets;
+  })();
+
+  try {
+    return await inFlightWarmPromise;
+  } finally {
+    inFlightWarmPromise = null;
+  }
+}
+

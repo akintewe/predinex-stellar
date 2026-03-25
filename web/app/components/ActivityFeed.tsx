@@ -115,6 +115,23 @@ const ActivityRow = memo(function ActivityRow({ item }: { item: ActivityItem }) 
     const config = TYPE_CONFIG[item.type];
     const Icon = config.icon;
 
+    const getEventLabel = () => {
+        if (!item.event) return null;
+        
+        switch (item.event.type) {
+            case 'bet':
+                return `Bet on ${item.event.outcome === 0 ? 'Outcome A' : 'Outcome B'}`;
+            case 'pool-creation':
+                return item.event.poolTitle || 'New Pool Created';
+            case 'settlement':
+                return `Settled: ${item.event.outcome === 0 ? 'Outcome A' : 'Outcome B'} won`;
+            case 'claim':
+                return `Claimed ${formatMicroSTX(item.event.winnerAmount || 0)} STX`;
+            default:
+                return null;
+        }
+    };
+
     return (
         <div
             className={`group flex items-center gap-4 p-5 rounded-2xl border ${config.border} bg-card/30 backdrop-blur-sm hover:bg-card/60 transition-all hover:shadow-lg hover:shadow-black/10 relative overflow-hidden`}
@@ -134,10 +151,13 @@ const ActivityRow = memo(function ActivityRow({ item }: { item: ActivityItem }) 
                     </span>
                 </div>
                 <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                    {item.poolId !== undefined && (
+                    {item.event && (
+                        <span className="font-medium text-foreground/90">{getEventLabel()}</span>
+                    )}
+                    {!item.event && item.poolId !== undefined && (
                         <span className="font-medium">Pool #{item.poolId}</span>
                     )}
-                    {item.amount !== undefined && (
+                    {item.amount !== undefined && !item.event?.winnerAmount && (
                         <span className="font-mono font-medium text-foreground/80">{formatMicroSTX(item.amount)} STX</span>
                     )}
                     <span className="font-mono text-xs">{item.txId.slice(0, 10)}…</span>

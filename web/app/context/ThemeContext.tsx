@@ -63,12 +63,3 @@ export function useTheme() {
   }
   return context;
 }
-// Theme context enhancement 2
-// Theme context enhancement 3
-// Theme context enhancement 4
-// Theme context enhancement 5
-// Theme context enhancement 6
-// Theme context enhancement 7
-// Theme context enhancement 8
-// Theme context enhancement 9
-// Theme context enhancement 10

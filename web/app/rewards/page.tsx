@@ -1,10 +1,10 @@
 'use client';
 
-import Navbar from "../../components/Navbar";
-import AuthGuard from "../../components/AuthGuard";
-import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "../../components/ui/accordion";
+import Navbar from "../components/Navbar";
+import AuthGuard from "../components/AuthGuard";
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "../components/ui/accordion";
 import { Info } from "lucide-react";
-import Leaderboard from "../../components/Leaderboard";
+import Leaderboard from "../components/Leaderboard";
 
 export default function RewardsPage() {
   return (
