@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useStacks } from './StacksProvider';
 import { useWalletConnection } from '../../lib/hooks/useWalletConnection';
 import { useToast } from '../../providers/ToastProvider';
@@ -22,18 +22,9 @@ export default function BettingSection({ pool, poolId }: BettingSectionProps) {
     const { contract } = getRuntimeConfig();
     const [betAmount, setBetAmount] = useState("");
     const [isBetting, setIsBetting] = useState(false);
-    const [walletBalance, setWalletBalance] = useState<number | null>(null);
 
-    // Fetch wallet balance when connection changes
-    useEffect(() => {
-        if (isConnected) {
-            // In a real app, fetch balance from API
-            const timer = setTimeout(() => setWalletBalance(100.0), 0); // Mock balance for testing
-            return () => clearTimeout(timer);
-        } else {
-            setWalletBalance(null);
-        }
-    }, [isConnected]);
+    // Derived directly from connection state — no effect needed for this mock value
+    const walletBalance: number | null = isConnected ? 100.0 : null;
 
     const placeBet = async (outcome: number) => {
         if (!userData) {

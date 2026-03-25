@@ -19,7 +19,7 @@ export default function PoolDetails({ params }: { params: Promise<{ id: string }
 
     const [pool, setPool] = useState<Pool | null>(null);
     const [isLoading, setIsLoading] = useState(true);
-    const [userBet, setUserBet] = useState<{amountA: number; amountB: number} | null>(null);
+    const [userBet, setUserBet] = useState<{ amountA: number; amountB: number } | null>(null);
 
     useEffect(() => {
         getPool(poolId).then(data => {
@@ -36,9 +36,9 @@ export default function PoolDetails({ params }: { params: Promise<{ id: string }
         }
     }, [stxAddress, poolId]);
 
-    const userHasWinnings = pool?.settled && userBet && 
-        ((pool.winningOutcome === 0 && userBet.amountA > 0) || 
-         (pool.winningOutcome === 1 && userBet.amountB > 0));
+    const userHasWinnings = pool?.settled && userBet &&
+        ((pool.winningOutcome === 0 && userBet.amountA > 0) ||
+            (pool.winningOutcome === 1 && userBet.amountB > 0));
 
 
 
@@ -128,10 +128,10 @@ export default function PoolDetails({ params }: { params: Promise<{ id: string }
                     {/* Betting UI */}
                     {pool.settled ? (
                         <div className="mt-6">
-                            <ClaimWinningsButton 
-                                poolId={poolId} 
-                                isSettled={pool.settled} 
-                                userHasWinnings={userHasWinnings} 
+                            <ClaimWinningsButton
+                                poolId={poolId}
+                                isSettled={pool.settled}
+                                userHasWinnings={userHasWinnings}
                             />
                         </div>
                     ) : (

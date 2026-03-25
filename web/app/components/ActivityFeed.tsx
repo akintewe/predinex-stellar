@@ -118,7 +118,7 @@ const ActivityRow = memo(function ActivityRow({ item, nowSeconds }: { item: Acti
 
     const getEventLabel = () => {
         if (!item.event) return null;
-        
+
         switch (item.event.type) {
             case 'bet':
                 return `Bet on ${item.event.outcome === 0 ? 'Outcome A' : 'Outcome B'}`;

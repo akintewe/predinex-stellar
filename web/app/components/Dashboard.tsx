@@ -205,41 +205,37 @@ export default function Dashboard() {
       <div className="flex gap-4 border-b border-border overflow-x-auto">
         <button
           onClick={() => setActiveTab('overview')}
-          className={`px-4 py-2 font-bold transition-all whitespace-nowrap ${
-            activeTab === 'overview'
+          className={`px-4 py-2 font-bold transition-all whitespace-nowrap ${activeTab === 'overview'
               ? 'text-primary border-b-2 border-primary'
               : 'text-muted-foreground hover:text-foreground'
-          }`}
+            }`}
         >
           Overview
         </button>
         <button
           onClick={() => setActiveTab('bets')}
-          className={`px-4 py-2 font-bold transition-all whitespace-nowrap ${
-            activeTab === 'bets'
+          className={`px-4 py-2 font-bold transition-all whitespace-nowrap ${activeTab === 'bets'
               ? 'text-primary border-b-2 border-primary'
               : 'text-muted-foreground hover:text-foreground'
-          }`}
+            }`}
         >
           Active Bets
         </button>
         <button
           onClick={() => setActiveTab('history')}
-          className={`px-4 py-2 font-bold transition-all whitespace-nowrap ${
-            activeTab === 'history'
+          className={`px-4 py-2 font-bold transition-all whitespace-nowrap ${activeTab === 'history'
               ? 'text-primary border-b-2 border-primary'
               : 'text-muted-foreground hover:text-foreground'
-          }`}
+            }`}
         >
           History
         </button>
         <button
           onClick={() => setActiveTab('incentives')}
-          className={`px-4 py-2 font-bold transition-all whitespace-nowrap flex items-center gap-2 ${
-            activeTab === 'incentives'
+          className={`px-4 py-2 font-bold transition-all whitespace-nowrap flex items-center gap-2 ${activeTab === 'incentives'
               ? 'text-primary border-b-2 border-primary'
               : 'text-muted-foreground hover:text-foreground'
-          }`}
+            }`}
         >
           <Gift className="w-4 h-4" />
           Incentives

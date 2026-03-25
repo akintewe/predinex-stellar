@@ -20,7 +20,7 @@ function logMarketDiscoveryNetworkOnce(): void {
     const cfg = getRuntimeConfig();
     const stacksNetwork = getStacksNetwork();
     console.info(
-      `[market-discovery] network=${cfg.network} coreApiUrl=${stacksNetwork.coreApiUrl} contract=${cfg.contract.id}`
+      `[market-discovery] network=${cfg.network} stacksApiBaseUrl=${stacksNetwork.client.baseUrl} contract=${cfg.contract.id}`
     );
   } catch (e) {
     // If config is invalid/missing, fail-fast will throw elsewhere; avoid masking it here.

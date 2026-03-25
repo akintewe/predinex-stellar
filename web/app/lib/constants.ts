@@ -71,4 +71,3 @@ export const ANIMATION_DURATION = {
   slow: 'duration-500',
 } as const;
 
-// CONTRACT_ADDRESS and CONTRACT_NAME are declared above with NEXT_PUBLIC_* env fallbacks.

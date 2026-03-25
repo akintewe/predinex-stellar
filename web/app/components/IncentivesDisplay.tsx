@@ -58,7 +58,7 @@ export default function IncentivesDisplay({ betterId, poolId }: IncentivesDispla
       {/* Header */}
       <div className="glass p-6 rounded-xl border border-border">
         <h2 className="text-2xl font-bold mb-4">Liquidity Incentives</h2>
-        
+
         {/* Stats */}
         <div className="grid grid-cols-2 gap-4">
           <div className="bg-muted/50 p-4 rounded-lg">
@@ -76,21 +76,19 @@ export default function IncentivesDisplay({ betterId, poolId }: IncentivesDispla
       <div className="flex gap-4 border-b border-border">
         <button
           onClick={() => setSelectedTab('pending')}
-          className={`px-4 py-2 font-bold transition-all ${
-            selectedTab === 'pending'
+          className={`px-4 py-2 font-bold transition-all ${selectedTab === 'pending'
               ? 'text-primary border-b-2 border-primary'
               : 'text-muted-foreground hover:text-foreground'
-          }`}
+            }`}
         >
           Pending ({pendingIncentives.length})
         </button>
         <button
           onClick={() => setSelectedTab('claimed')}
-          className={`px-4 py-2 font-bold transition-all ${
-            selectedTab === 'claimed'
+          className={`px-4 py-2 font-bold transition-all ${selectedTab === 'claimed'
               ? 'text-primary border-b-2 border-primary'
               : 'text-muted-foreground hover:text-foreground'
-          }`}
+            }`}
         >
           Claimed ({claimedIncentives.length})
         </button>
