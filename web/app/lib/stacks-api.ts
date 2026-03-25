@@ -1,6 +1,13 @@
 import { STACKS_MAINNET, STACKS_TESTNET, StacksNetwork } from "@stacks/network";
 import { fetchCallReadOnlyFunction, cvToValue, uintCV, principalCV, ClarityValue } from "@stacks/transactions";
-import { CONTRACT_ADDRESS, CONTRACT_NAME, DEFAULT_NETWORK, NETWORK_CONFIG } from "./constants";
+import {
+    CONTRACT_ADDRESS,
+    CONTRACT_NAME,
+    DEFAULT_NETWORK,
+    NETWORK_CONFIG,
+    STACKS_API_BASE_URL,
+    NetworkConfig,
+} from "./constants";
 
 // Use network based on environment
 const network: StacksNetwork = DEFAULT_NETWORK === 'mainnet' ? STACKS_MAINNET : STACKS_TESTNET;
@@ -206,20 +213,44 @@ function extractPoolInfo(args: any[]): { amount?: number; poolId?: number } {
 }
 
 /**
+ * Injectable configuration for getUserActivity, enabling test isolation.
+ */
+export interface ActivityConfig {
+    /** Base URL for the Stacks API, e.g. https://api.testnet.hiro.so */
+    apiBaseUrl: string;
+    /** Explorer base URL used to build transaction links */
+    explorerUrl: string;
+    /** Contract address used to filter Predinex transactions */
+    contractAddress: string;
+}
+
+/**
  * Fetches recent on-chain activity for a user address by querying the
  * Stacks blockchain API for contract-call transactions targeting the
  * Predinex contract. Uses contract events when available for richer data.
+ *
+ * @param userAddress - Stacks principal to query
+ * @param limit       - Maximum number of transactions to fetch (default 20)
+ * @param config      - Optional injectable config; falls back to module-level constants
  */
 export async function getUserActivity(
     userAddress: string,
-    limit: number = 20
+    limit: number = 20,
+    config?: Partial<ActivityConfig>
 ): Promise<ActivityItem[]> {
     try {
-        const { STACKS_API_BASE_URL } = await import('./constants');
-        const { NETWORK_CONFIG, DEFAULT_NETWORK } = await import('./constants');
-        const explorerBase = NETWORK_CONFIG[DEFAULT_NETWORK].explorerUrl;
+        const explorerBase =
+            config?.explorerUrl ?? NETWORK_CONFIG[DEFAULT_NETWORK]?.explorerUrl;
 
-        const url = `${STACKS_API_BASE_URL}/extended/v1/address/${userAddress}/transactions?limit=${limit}&type=contract_call`;
+        if (!explorerBase) {
+            console.error('getUserActivity: explorerUrl is not configured');
+            return [];
+        }
+
+        const apiBase = config?.apiBaseUrl ?? STACKS_API_BASE_URL;
+        const contractAddr = config?.contractAddress ?? CONTRACT_ADDRESS;
+
+        const url = `${apiBase}/extended/v1/address/${userAddress}/transactions?limit=${limit}&type=contract_call`;
         const response = await fetch(url);
 
         if (!response.ok) {
@@ -233,7 +264,7 @@ export async function getUserActivity(
         const predinexTxs = results.filter((tx: any) => {
             const callInfo = tx.contract_call;
             if (!callInfo) return false;
-            return callInfo.contract_id?.includes(CONTRACT_ADDRESS);
+            return callInfo.contract_id?.includes(contractAddr);
         });
 
         return predinexTxs.map((tx: any): ActivityItem => {
@@ -251,7 +282,7 @@ export async function getUserActivity(
 
             const args: any[] = callInfo?.function_args || [];
             const { amount, poolId } = extractPoolInfo(args);
-            
+
             const event = parseContractEvents(tx);
 
             return {
