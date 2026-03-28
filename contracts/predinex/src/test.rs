@@ -498,3 +498,78 @@ fn test_settle_pool_unauthorized_then_authorized_succeeds() {
     assert!(pool.settled);
     assert_eq!(pool.winning_outcome, Some(0));
 }
+
+#[test]
+fn test_get_user_bet_returns_correct_amounts() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin  = Address::generate(&env);
+    let user   = Address::generate(&env);
+    let token  = env.register_stellar_asset_contract_v2(admin.clone())
+        .address();
+
+    let contract_id = env.register(PredinexContract, ());
+    let client = PredinexContractClient::new(&env, &contract_id);
+
+    client.initialize(&token);
+
+    let pool_id = client.create_pool(
+        &admin,
+        &String::from_str(&env, "Will it rain?"),
+        &String::from_str(&env, "A simple weather pool"),
+        &String::from_str(&env, "Yes"),
+        &String::from_str(&env, "No"),
+        &3600u64,
+    );
+
+    // Fund user via the token admin
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&user, &500i128);
+
+    // Place bet on outcome A (100 tokens)
+    client.place_bet(&user, &pool_id, &0u32, &100i128);
+    // Place bet on outcome B (200 tokens)
+    client.place_bet(&user, &pool_id, &1u32, &200i128);
+
+    let bet = client
+        .get_user_bet(&pool_id, &user)
+        .expect("bet must exist after placing");
+
+    assert_eq!(bet.amount_a, 100i128,  "amount_a must reflect outcome-0 bets");
+    assert_eq!(bet.amount_b, 200i128,  "amount_b must reflect outcome-1 bets");
+    assert_eq!(bet.total_bet, 300i128, "total_bet must be the sum of both sides");
+}
+
+#[test]
+fn test_get_user_bet_returns_none_for_user_with_no_bet() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin     = Address::generate(&env);
+    let no_bet_user = Address::generate(&env);
+    let token     = env.register_stellar_asset_contract_v2(admin.clone())
+        .address();
+
+    let contract_id = env.register(PredinexContract, ());
+    let client = PredinexContractClient::new(&env, &contract_id);
+
+    client.initialize(&token);
+
+    let pool_id = client.create_pool(
+        &admin,
+        &String::from_str(&env, "Will it rain?"),
+        &String::from_str(&env, "A simple weather pool"),
+        &String::from_str(&env, "Yes"),
+        &String::from_str(&env, "No"),
+        &3600u64,
+    );
+
+    // no_bet_user never called place_bet — must not panic
+    let result = client.get_user_bet(&pool_id, &no_bet_user);
+
+    assert!(
+        result.is_none(),
+        "get_user_bet must return None for a user who has not placed a bet"
+    );
+}

@@ -273,4 +273,10 @@ impl PredinexContract {
             .get(&DataKey::PoolCounter)
             .unwrap_or(1)
     }
+
+    pub fn get_user_bet(env: Env, pool_id: u32, user: Address) -> Option<UserBet> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::UserBet(pool_id, user))
+    }
 }
