@@ -101,8 +101,8 @@ describe('BettingSection', () => {
     await user.click(betButton);
 
     expect(showToast).toHaveBeenCalledWith(
-      'Please enter a valid bet amount greater than 0.',
-      'error'
+      toastMessages.bet.invalidAmount.message,
+      toastMessages.bet.invalidAmount.type
     );
     expect(vi.mocked(predinexContract.placeBet)).not.toHaveBeenCalled();
   });

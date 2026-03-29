@@ -43,7 +43,7 @@ export default function WalletButton({ className, label = 'Connect Wallet' }: Wa
       await withTimeout(Promise.resolve(connect()), 15000, 'Wallet connection timeout');
     } catch (error) {
       const issue = classifyConnectivityIssue(error);
-      showToast(getConnectivityMessage(issue, 'Connecting wallet'), 'error');
+      showToastPayload(showToast, connectivityErrorToast(issue, 'Connecting wallet'));
     }
   };
 
