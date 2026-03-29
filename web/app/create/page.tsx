@@ -73,7 +73,7 @@ export default function CreateMarket() {
                             <button type="submit" className="w-full py-3 bg-primary text-primary-foreground rounded-lg font-bold">
                                 Create Market (50 STX)
                             </button>
-                       </div>
+                        </div>
                     </form>
                 </div>
             </AuthGuard>
