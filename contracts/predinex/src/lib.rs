@@ -1,5 +1,5 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, contracttype, token, Address, Env, String, Symbol};
+use soroban_sdk::{contract, contractimpl, contracttype, token, Address, Env, String, Symbol, Vec};
 
 mod test;
 
@@ -99,6 +99,11 @@ impl PredinexContract {
 
     pub fn place_bet(env: Env, user: Address, pool_id: u32, outcome: u32, amount: i128) {
         user.require_auth();
+
+        // Validate positive bet amount
+        if amount <= 0 {
+            panic!("Invalid bet amount");
+        }
 
         let mut pool = env
             .storage()
@@ -341,6 +346,29 @@ impl PredinexContract {
             .persistent()
             .get(&DataKey::PoolCounter)
             .unwrap_or(1)
+    }
+
+    /// Get a batch of pools for pagination-friendly listing.
+    /// Returns pools from start_id up to count pools (or fewer if some don't exist).
+    /// Handles missing/gap pools safely by returning None for those positions.
+    pub fn get_pools_batch(env: Env, start_id: u32, count: u32) -> Vec<Option<Pool>> {
+        let mut pools = Vec::new(&env);
+        let max_id = Self::get_pool_count(&env);
+
+        // Limit count to prevent excessive gas usage
+        let effective_count = if count > 100 { 100 } else { count };
+
+        for i in 0..effective_count {
+            let pool_id = start_id + i;
+            if pool_id >= max_id {
+                // No more pools exist, stop early
+                break;
+            }
+            let pool = env.storage().persistent().get(&DataKey::Pool(pool_id));
+            pools.push_back(pool);
+        }
+
+        pools
     }
 
     fn get_pool_counter(env: &Env) -> u32 {

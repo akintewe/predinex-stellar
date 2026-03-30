@@ -5,21 +5,7 @@ import { useWallet } from './WalletAdapterProvider';
 import { useWalletConnect } from '../lib/hooks/useWalletConnect';
 import { Loader2, AlertCircle, CheckCircle, TrendingUp, Users } from 'lucide-react';
 import { formatDisplayAddress } from '../lib/address-display';
-
-interface Pool {
-  id: number;
-  title: string;
-  description: string;
-  outcomeA: string;
-  outcomeB: string;
-  totalA: number;
-  totalB: number;
-  settled: boolean;
-  winningOutcome?: number;
-  creator: string;
-  createdAt: number;
-  expiryBlock: number;
-}
+import { mockPools, type Pool } from '../lib/fixtures/poolIntegration';
 
 interface PoolStats {
   totalPools: number;
@@ -54,22 +40,7 @@ export default function PoolIntegration() {
     setError(null);
     try {
       // In a real app, this would fetch from the Stacks API
-      // For now, we'll use mock data
-      const mockPools: Pool[] = [
-        {
-          id: 0,
-          title: 'Bitcoin Price > $100k?',
-          description: 'Will Bitcoin reach $100,000 by end of Q1 2025?',
-          outcomeA: 'Yes',
-          outcomeB: 'No',
-          totalA: 50000000,
-          totalB: 30000000,
-          settled: false,
-          creator: 'SP...',
-          createdAt: Date.now(),
-          expiryBlock: 144,
-        },
-      ];
+      // For now, we use fixtures for development/demo
       setPools(mockPools);
       updateStats(mockPools);
     } catch (err) {

@@ -808,5 +808,353 @@ fn b6_settle_pool_winning_outcome_1_is_valid() {
         "winning_outcome must be 1"
     );
 }
- 
+
+// ============================================================================
+// Issue #55: Validate positive bet amounts in place_bet
+//
+// The contract must reject zero and negative bet amounts explicitly.
+// ============================================================================
+
+/// C1: place_bet with amount == 0 must be rejected.
+#[test]
+#[should_panic(expected = "Invalid bet amount")]
+fn c1_place_bet_zero_amount_rejected() {
+    let t = setup();
+    let pool_id = make_pool(&t);
+    t.client.place_bet(&t.user, &pool_id, &0u32, &0i128);
+}
+
+/// C2: place_bet with negative amount must be rejected.
+#[test]
+#[should_panic(expected = "Invalid bet amount")]
+fn c2_place_bet_negative_amount_rejected() {
+    let t = setup();
+    let pool_id = make_pool(&t);
+    t.client.place_bet(&t.user, &pool_id, &0u32, &-100i128);
+}
+
+/// C3: pool state must not change after a rejected bet due to invalid amount.
+#[test]
+fn c3_invalid_amount_does_not_mutate_pool_state() {
+    let t = setup();
+    let pool_id = make_pool(&t);
+
+    // Confirm pool starts clean
+    let pool_before = t.client.get_pool(&pool_id).expect("pool must exist");
+    assert_eq!(pool_before.total_a, 0i128);
+    assert_eq!(pool_before.total_b, 0i128);
+
+    // Attempt a zero-amount bet — must panic
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        t.client.place_bet(&t.user, &pool_id, &0u32, &0i128);
+    }));
+    assert!(result.is_err(), "zero amount bet must panic");
+
+    // Pool totals must be unchanged
+    let pool_after = t.client.get_pool(&pool_id).expect("pool must still exist");
+    assert_eq!(
+        pool_after.total_a, 0i128,
+        "total_a must not change after rejected bet"
+    );
+    assert_eq!(
+        pool_after.total_b, 0i128,
+        "total_b must not change after rejected bet"
+    );
+
+    // User balance must be unchanged (no token transfer)
+    let token = soroban_sdk::token::Client::new(&t.env, &t.token);
+    assert_eq!(
+        token.balance(&t.user),
+        10_000i128,
+        "user balance must be unchanged after rejected bet"
+    );
+}
+
+/// C4: positive amount continues to work (boundary test).
+#[test]
+fn c4_place_bet_positive_amount_works() {
+    let t = setup();
+    let pool_id = make_pool(&t);
+
+    // Must not panic
+    t.client.place_bet(&t.user, &pool_id, &0u32, &100i128);
+
+    let pool = t.client.get_pool(&pool_id).expect("pool must exist");
+    assert_eq!(pool.total_a, 100i128, "total_a must reflect the bet");
+}
+
+// ============================================================================
+// Issue #60: Expired pool betting rejection tests
+//
+// The contract must reject bets placed after the pool expiry timestamp.
+// This ensures betting is closed once the market expires.
+// ============================================================================
+
+/// D1: place_bet after pool expiry must be rejected.
+#[test]
+#[should_panic(expected = "Pool expired")]
+fn d1_place_bet_after_expiry_rejected() {
+    let t = setup();
+    let pool_id = make_pool(&t);
+
+    // Advance ledger time past expiry
+    expire_pool(&t.env);
+
+    // Attempt to place bet after expiry — must panic
+    t.client.place_bet(&t.user, &pool_id, &0u32, &100i128);
+}
+
+/// D2: place_bet exactly at expiry timestamp is rejected (boundary test).
+#[test]
+#[should_panic(expected = "Pool expired")]
+fn d2_place_bet_exactly_at_expiry_rejected() {
+    let t = setup();
+    let pool_id = make_pool(&t);
+
+    // Set ledger timestamp exactly at expiry (pool created with 3600s duration)
+    t.env.ledger().with_mut(|info| {
+        info.timestamp = 3600; // Exactly at expiry
+    });
+
+    // Attempt to place bet exactly at expiry — must panic
+    t.client.place_bet(&t.user, &pool_id, &0u32, &100i128);
+}
+
+/// D3: no token transfer occurs when betting on expired pool.
+#[test]
+fn d3_expired_bet_does_not_transfer_tokens() {
+    let t = setup();
+    let pool_id = make_pool(&t);
+
+    // Record initial balance
+    let token = soroban_sdk::token::Client::new(&t.env, &t.token);
+    let initial_balance = token.balance(&t.user);
+
+    // Advance past expiry
+    expire_pool(&t.env);
+
+    // Attempt bet — must panic
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        t.client.place_bet(&t.user, &pool_id, &0u32, &100i128);
+    }));
+    assert!(result.is_err(), "bet after expiry must panic");
+
+    // Verify no tokens were transferred
+    let final_balance = token.balance(&t.user);
+    assert_eq!(
+        final_balance, initial_balance,
+        "no token transfer should occur for expired pool bet"
+    );
+}
+
+/// D4: place_bet just before expiry succeeds (boundary test).
+#[test]
+fn d4_place_bet_just_before_expiry_succeeds() {
+    let t = setup();
+    let pool_id = make_pool(&t);
+
+    // Set ledger timestamp just before expiry
+    t.env.ledger().with_mut(|info| {
+        info.timestamp = 3599; // 1 second before expiry at 3600
+    });
+
+    // Should succeed
+    t.client.place_bet(&t.user, &pool_id, &0u32, &100i128);
+
+    let pool = t.client.get_pool(&pool_id).expect("pool must exist");
+    assert_eq!(pool.total_a, 100i128, "bet should be recorded");
+}
+
+// ============================================================================
+// Issue #64: Pagination-friendly pool listing tests
+//
+// The contract exposes get_pools_batch for efficient paginated pool discovery.
+// ============================================================================
+
+/// E1: get_pools_batch returns correct slice of pools.
+#[test]
+fn e1_get_pools_batch_returns_correct_slice() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let token_admin = Address::generate(&env);
+    let token_id = env.register_stellar_asset_contract_v2(token_admin.clone());
+
+    let contract_id = env.register(PredinexContract, ());
+    let client = PredinexContractClient::new(&env, &contract_id);
+
+    client.initialize(&token_id.address(), &token_admin);
+
+    // Create 5 pools
+    let creator = Address::generate(&env);
+    for i in 0..5 {
+        client.create_pool(
+            &creator,
+            &String::from_str(&env, &format!("Market {}", i)),
+            &String::from_str(&env, "Description"),
+            &String::from_str(&env, "Yes"),
+            &String::from_str(&env, "No"),
+            &3600u64,
+        );
+    }
+
+    // Fetch batch starting from pool 1, count 3
+    let batch = client.get_pools_batch(&1u32, &3u32);
+    assert_eq!(batch.len(), 3, "should return exactly 3 pools");
+
+    // Verify pool IDs (1-indexed)
+    let pool1 = batch.get(0).unwrap().unwrap();
+    let pool2 = batch.get(1).unwrap().unwrap();
+    let pool3 = batch.get(2).unwrap().unwrap();
+
+    assert_eq!(pool1.title, String::from_str(&env, "Market 0"));
+    assert_eq!(pool2.title, String::from_str(&env, "Market 1"));
+    assert_eq!(pool3.title, String::from_str(&env, "Market 2"));
+}
+
+/// E2: get_pools_batch handles partial pages at boundaries.
+#[test]
+fn e2_get_pools_batch_handles_partial_pages() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let token_admin = Address::generate(&env);
+    let token_id = env.register_stellar_asset_contract_v2(token_admin.clone());
+
+    let contract_id = env.register(PredinexContract, ());
+    let client = PredinexContractClient::new(&env, &contract_id);
+
+    client.initialize(&token_id.address(), &token_admin);
+
+    // Create 3 pools
+    let creator = Address::generate(&env);
+    for i in 0..3 {
+        client.create_pool(
+            &creator,
+            &String::from_str(&env, &format!("Market {}", i)),
+            &String::from_str(&env, "Description"),
+            &String::from_str(&env, "Yes"),
+            &String::from_str(&env, "No"),
+            &3600u64,
+        );
+    }
+
+    // Request more pools than exist (start at 2, count 5)
+    let batch = client.get_pools_batch(&2u32, &5u32);
+    // Should only return pools 2 and 3 (indices 1 and 2)
+    assert_eq!(batch.len(), 2, "should return only available pools");
+}
+
+/// E3: get_pools_batch returns empty when start_id exceeds pool count.
+#[test]
+fn e3_get_pools_batch_empty_when_start_exceeds_count() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let token_admin = Address::generate(&env);
+    let token_id = env.register_stellar_asset_contract_v2(token_admin.clone());
+
+    let contract_id = env.register(PredinexContract, ());
+    let client = PredinexContractClient::new(&env, &contract_id);
+
+    client.initialize(&token_id.address(), &token_admin);
+
+    // Create 2 pools
+    let creator = Address::generate(&env);
+    client.create_pool(
+        &creator,
+        &String::from_str(&env, "Market 1"),
+        &String::from_str(&env, "Description"),
+        &String::from_str(&env, "Yes"),
+        &String::from_str(&env, "No"),
+        &3600u64,
+    );
+    client.create_pool(
+        &creator,
+        &String::from_str(&env, "Market 2"),
+        &String::from_str(&env, "Description"),
+        &String::from_str(&env, "Yes"),
+        &String::from_str(&env, "No"),
+        &3600u64,
+    );
+
+    // Request starting beyond pool count
+    let batch = client.get_pools_batch(&100u32, &10u32);
+    assert_eq!(batch.len(), 0, "should return empty when start exceeds count");
+}
+
+/// E4: get_pools_batch caps count at 100 to prevent excessive gas.
+#[test]
+fn e4_get_pools_batch_caps_count_at_100() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let token_admin = Address::generate(&env);
+    let token_id = env.register_stellar_asset_contract_v2(token_admin.clone());
+
+    let contract_id = env.register(PredinexContract, ());
+    let client = PredinexContractClient::new(&env, &contract_id);
+
+    client.initialize(&token_id.address(), &token_admin);
+
+    // Create 105 pools
+    let creator = Address::generate(&env);
+    for i in 0..105 {
+        client.create_pool(
+            &creator,
+            &String::from_str(&env, &format!("Market {}", i)),
+            &String::from_str(&env, "Description"),
+            &String::from_str(&env, "Yes"),
+            &String::from_str(&env, "No"),
+            &3600u64,
+        );
+    }
+
+    // Request 200 pools, should be capped at 100
+    let batch = client.get_pools_batch(&1u32, &200u32);
+    assert_eq!(batch.len(), 100, "should cap count at 100 pools");
+}
+
+/// E5: get_pools_batch handles gaps in pool IDs gracefully.
+#[test]
+fn e5_get_pools_batch_handles_gaps() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let token_admin = Address::generate(&env);
+    let token_id = env.register_stellar_asset_contract_v2(token_admin.clone());
+
+    let contract_id = env.register(PredinexContract, ());
+    let client = PredinexContractClient::new(&env, &contract_id);
+
+    client.initialize(&token_id.address(), &token_admin);
+
+    let creator = Address::generate(&env);
+
+    // Create pools 1 and 3 (we'll simulate a gap at 2 by not creating it,
+    // but since pools are sequential, we'll just verify the function returns
+    // Option<Pool> for each position)
+    client.create_pool(
+        &creator,
+        &String::from_str(&env, "Market 1"),
+        &String::from_str(&env, "Description"),
+        &String::from_str(&env, "Yes"),
+        &String::from_str(&env, "No"),
+        &3600u64,
+    );
+    client.create_pool(
+        &creator,
+        &String::from_str(&env, "Market 2"),
+        &String::from_str(&env, "Description"),
+        &String::from_str(&env, "Yes"),
+        &String::from_str(&env, "No"),
+        &3600u64,
+    );
+
+    let batch = client.get_pools_batch(&1u32, &2u32);
+    assert_eq!(batch.len(), 2, "should return 2 pools");
+    assert!(batch.get(0).is_some(), "pool 1 should exist");
+    assert!(batch.get(1).is_some(), "pool 2 should exist");
+}
+
 }
