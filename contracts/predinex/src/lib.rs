@@ -553,6 +553,10 @@ impl PredinexContract {
             panic!("Unauthorized");
         }
 
+        if amount <= 0 {
+            panic!("Invalid withdrawal amount");
+        }
+
         let current_treasury: i128 = env
             .storage()
             .persistent()

@@ -1378,3 +1378,56 @@ fn claim_status_voided_pool_transitions() {
 
     assert_eq!(t.client.get_claim_status(&pool_id, &user), super::ClaimStatus::AlreadyClaimed);
 }
+
+// ── Issue #186: treasury withdrawal amount validation ─────────────────────────
+
+/// Helper: set up a contract with some treasury balance accumulated via a settled pool.
+fn setup_with_treasury() -> (TestEnv<'static>, u32) {
+    let t = setup();
+    let pool_id = make_pool(&t);
+
+    // user1 bets A, user2 bets B — creates a pool with funds
+    let user2 = Address::generate(&t.env);
+    let token_admin = soroban_sdk::token::StellarAssetClient::new(&t.env, &t.token);
+    token_admin.mint(&user2, &1000);
+
+    t.client.place_bet(&t.user, &pool_id, &0, &500);
+    t.client.place_bet(&user2, &pool_id, &1, &500);
+
+    expire_pool(&t.env);
+    t.client.settle_pool(&t.admin, &pool_id, &0);
+
+    // winner claims — 2% fee (20 tokens) goes to treasury
+    t.client.claim_winnings(&t.user, &pool_id);
+
+    (t, pool_id)
+}
+
+/// Zero withdrawal must be rejected.
+#[test]
+#[should_panic(expected = "Invalid withdrawal amount")]
+fn treasury_withdraw_zero_rejected() {
+    let (t, _) = setup_with_treasury();
+    t.client.withdraw_treasury(&t.admin, &0i128);
+}
+
+/// Negative withdrawal must be rejected.
+#[test]
+#[should_panic(expected = "Invalid withdrawal amount")]
+fn treasury_withdraw_negative_rejected() {
+    let (t, _) = setup_with_treasury();
+    t.client.withdraw_treasury(&t.admin, &-1i128);
+}
+
+/// Valid positive withdrawal succeeds and reduces the treasury balance.
+#[test]
+fn treasury_withdraw_positive_succeeds() {
+    let (t, _) = setup_with_treasury();
+
+    let before = t.client.get_treasury_balance();
+    assert!(before > 0, "treasury must have a balance after fee collection");
+
+    t.client.withdraw_treasury(&t.admin, &before);
+
+    assert_eq!(t.client.get_treasury_balance(), 0);
+}
