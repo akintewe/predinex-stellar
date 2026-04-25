@@ -30,6 +30,8 @@ pub struct Pool {
     pub created_at: u64,
     pub settled_at: Option<u64>,
     pub expiry: u64,
+    /// Current operational status of the pool. Defaults to `Active`.
+    pub status: PoolStatus,
 }
 
 #[derive(Clone)]
@@ -85,6 +87,7 @@ impl PredinexContract {
             created_at,
             settled_at: None,
             expiry,
+            status: PoolStatus::Active,
         };
 
         env.storage()
@@ -116,6 +119,10 @@ impl PredinexContract {
 
         if pool.settled {
             panic!("Pool already settled");
+        }
+
+        if pool.status != PoolStatus::Active {
+            panic!("Pool is not active");
         }
 
         if env.ledger().timestamp() >= pool.expiry {
@@ -264,6 +271,10 @@ impl PredinexContract {
             panic!("Pool not settled");
         }
 
+        if pool.status != PoolStatus::Active {
+            panic!("Pool is frozen or disputed; claims are blocked");
+        }
+
         let user_bet = env
             .storage()
             .persistent()
@@ -384,6 +395,121 @@ impl PredinexContract {
         );
     }
 
+    /// Set (or replace) the freeze admin address. Only callable by the treasury recipient.
+    /// The freeze admin is the sole authority that can freeze, dispute, or unfreeze pools.
+    pub fn set_freeze_admin(env: Env, caller: Address, freeze_admin: Address) {
+        caller.require_auth();
+
+        let treasury_recipient: Address = env
+            .storage()
+            .persistent()
+            .get(&DataKey::TreasuryRecipient)
+            .expect("Not initialized");
+
+        if caller != treasury_recipient {
+            panic!("Unauthorized");
+        }
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::FreezeAdmin, &freeze_admin);
+
+        env.events().publish(
+            (Symbol::new(&env, "freeze_admin_set"),),
+            freeze_admin,
+        );
+    }
+
+    /// Freeze a pool, blocking new bets and claim payouts.
+    /// Callable only by the freeze admin.
+    ///
+    /// Operational flow: call this as soon as an incorrect settlement is suspected.
+    /// The pool stays frozen until `unfreeze_pool` is called (after review clears it)
+    /// or `dispute_pool` escalates it to the Disputed state.
+    pub fn freeze_pool(env: Env, caller: Address, pool_id: u32) {
+        caller.require_auth();
+        Self::require_freeze_admin(&env, &caller);
+
+        let mut pool = env
+            .storage()
+            .persistent()
+            .get::<_, Pool>(&DataKey::Pool(pool_id))
+            .expect("Pool not found");
+
+        if pool.status == PoolStatus::Frozen {
+            panic!("Pool already frozen");
+        }
+
+        pool.status = PoolStatus::Frozen;
+        env.storage()
+            .persistent()
+            .set(&DataKey::Pool(pool_id), &pool);
+
+        env.events()
+            .publish((Symbol::new(&env, "pool_frozen"), pool_id), caller);
+    }
+
+    /// Mark a settled pool as disputed, blocking claim payouts pending review.
+    /// Callable only by the freeze admin.
+    ///
+    /// Operational flow: use this when a settlement result is actively contested.
+    /// Resolve by calling `unfreeze_pool` (to restore the existing settlement) or
+    /// `settle_pool` again after correcting the outcome, then `unfreeze_pool`.
+    pub fn dispute_pool(env: Env, caller: Address, pool_id: u32) {
+        caller.require_auth();
+        Self::require_freeze_admin(&env, &caller);
+
+        let mut pool = env
+            .storage()
+            .persistent()
+            .get::<_, Pool>(&DataKey::Pool(pool_id))
+            .expect("Pool not found");
+
+        if !pool.settled {
+            panic!("Pool must be settled before it can be disputed");
+        }
+
+        if pool.status == PoolStatus::Disputed {
+            panic!("Pool already disputed");
+        }
+
+        pool.status = PoolStatus::Disputed;
+        env.storage()
+            .persistent()
+            .set(&DataKey::Pool(pool_id), &pool);
+
+        env.events()
+            .publish((Symbol::new(&env, "pool_disputed"), pool_id), caller);
+    }
+
+    /// Unfreeze a frozen or disputed pool, restoring it to Active status.
+    /// Callable only by the freeze admin.
+    ///
+    /// Operational flow: call this once the review is complete and the pool state
+    /// is confirmed correct. Claims and (for non-settled pools) bets resume normally.
+    pub fn unfreeze_pool(env: Env, caller: Address, pool_id: u32) {
+        caller.require_auth();
+        Self::require_freeze_admin(&env, &caller);
+
+        let mut pool = env
+            .storage()
+            .persistent()
+            .get::<_, Pool>(&DataKey::Pool(pool_id))
+            .expect("Pool not found");
+
+        if pool.status == PoolStatus::Active {
+            panic!("Pool is not frozen or disputed");
+        }
+
+        pool.status = PoolStatus::Active;
+        env.storage()
+            .persistent()
+            .set(&DataKey::Pool(pool_id), &pool);
+
+        env.events()
+            .publish((Symbol::new(&env, "pool_unfrozen"), pool_id), caller);
+    }
+
     pub fn get_pool(env: Env, pool_id: u32) -> Option<Pool> {
         env.storage().persistent().get(&DataKey::Pool(pool_id))
     }
@@ -423,6 +549,17 @@ impl PredinexContract {
             .persistent()
             .get(&DataKey::PoolCounter)
             .unwrap_or(1)
+    }
+
+    fn require_freeze_admin(env: &Env, caller: &Address) {
+        let freeze_admin: Address = env
+            .storage()
+            .persistent()
+            .get(&DataKey::FreezeAdmin)
+            .expect("Freeze admin not set");
+        if caller != &freeze_admin {
+            panic!("Unauthorized: caller is not the freeze admin");
+        }
     }
 
     pub fn get_user_bet(env: Env, pool_id: u32, user: Address) -> Option<UserBet> {
