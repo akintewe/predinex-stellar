@@ -65,6 +65,10 @@ We use a custom component library located in `web/components/ui/`. Key component
 - `Tooltip`: Informational overlays.
 - `Toast`: Session notifications.
 
+## Local End-to-End Setup
+
+To run the contract and the web app together locally (deploy to testnet, wire env vars, smoke-test the full stack), follow the [Local End-to-End Runbook](../docs/local-runbook.md).
+
 ## Contract Integration
 
 When working on features that touch the smart contract interface:
