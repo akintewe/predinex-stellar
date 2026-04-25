@@ -43,6 +43,29 @@ pub struct UserBet {
     pub total_bet: i128,
 }
 
+/// Event payload emitted by `place_bet`.
+///
+/// Fields
+/// ------
+/// - `outcome`   – which side was bet on (0 = A, 1 = B)
+/// - `amount`    – tokens staked in this single bet
+/// - `amount_a`  – user's cumulative stake on outcome A after this bet
+/// - `amount_b`  – user's cumulative stake on outcome B after this bet
+/// - `total_bet` – user's total exposure in this pool after this bet
+///
+/// The `amount_a`, `amount_b`, and `total_bet` values are identical to what
+/// `get_user_bet` would return immediately after the call, allowing indexers
+/// and UI consumers to maintain a local position model from events alone.
+#[derive(Clone)]
+#[contracttype]
+pub struct BetEvent {
+    pub outcome: u32,
+    pub amount: i128,
+    pub amount_a: i128,
+    pub amount_b: i128,
+    pub total_bet: i128,
+}
+
 #[contract]
 pub struct PredinexContract;
 
@@ -219,9 +242,17 @@ impl PredinexContract {
             .persistent()
             .set(&DataKey::UserBet(pool_id, user.clone()), &user_bet);
 
+        // Emit event with the bet details and the user's updated cumulative totals.
+        // Consumers can reconstruct a full UserBet position from events alone.
         env.events().publish(
             (Symbol::new(&env, "place_bet"), pool_id, user),
-            (outcome, amount),
+            BetEvent {
+                outcome,
+                amount,
+                amount_a: user_bet.amount_a,
+                amount_b: user_bet.amount_b,
+                total_bet: user_bet.total_bet,
+            },
         );
     }
 
