@@ -50,7 +50,9 @@ impl PredinexContract {
             panic!("Already initialized");
         }
         env.storage().persistent().set(&DataKey::Token, &token);
-        env.storage().persistent().set(&DataKey::TreasuryRecipient, &treasury_recipient);
+        env.storage()
+            .persistent()
+            .set(&DataKey::TreasuryRecipient, &treasury_recipient);
         env.storage().persistent().set(&DataKey::Treasury, &0i128);
     }
 
@@ -216,8 +218,8 @@ impl PredinexContract {
             .persistent()
             .get(&DataKey::DelegatedSettler(pool_id));
 
-        let is_authorized = caller == pool.creator
-            || delegated_settler.map(|s| s == caller).unwrap_or(false);
+        let is_authorized =
+            caller == pool.creator || delegated_settler.map(|s| s == caller).unwrap_or(false);
 
         if !is_authorized {
             panic!("Unauthorized");
@@ -243,8 +245,10 @@ impl PredinexContract {
             .persistent()
             .set(&DataKey::Pool(pool_id), &pool);
 
-        env.events()
-            .publish((Symbol::new(&env, "settle_pool"), pool_id), (caller, winning_outcome));
+        env.events().publish(
+            (Symbol::new(&env, "settle_pool"), pool_id),
+            (caller, winning_outcome),
+        );
     }
 
     pub fn claim_winnings(env: Env, user: Address, pool_id: u32) -> i128 {
@@ -299,10 +303,8 @@ impl PredinexContract {
             .persistent()
             .set(&DataKey::Treasury, &(current_treasury + fee));
 
-        env.events().publish(
-            (Symbol::new(&env, "fee_collected"), pool_id),
-            fee,
-        );
+        env.events()
+            .publish((Symbol::new(&env, "fee_collected"), pool_id), fee);
 
         let token_address = env
             .storage()
@@ -366,7 +368,11 @@ impl PredinexContract {
             .expect("Not initialized");
         let token_client = token::Client::new(&env, &token_address);
 
-        token_client.transfer(&env.current_contract_address(), &treasury_recipient, &amount);
+        token_client.transfer(
+            &env.current_contract_address(),
+            &treasury_recipient,
+            &amount,
+        );
 
         env.storage()
             .persistent()
