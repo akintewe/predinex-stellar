@@ -1185,8 +1185,7 @@ fn f1_delegated_settler_can_settle_after_expiry() {
     t.client.settle_pool(&settler, &pool_id, &0u32);
 
     let pool = t.client.get_pool(&pool_id).expect("pool must exist");
-    assert!(pool.settled, "pool must be settled");
-    assert_eq!(pool.winning_outcome, Some(0u32));
+    assert_eq!(pool.status, PoolStatus::Settled(0), "pool must be settled");
 }
 
 /// F2: Unauthorized address cannot settle even after expiry.
@@ -1229,8 +1228,7 @@ fn f4_creator_can_settle_without_delegated_settler() {
     t.client.settle_pool(&t.admin, &pool_id, &1u32);
 
     let pool = t.client.get_pool(&pool_id).expect("pool must exist");
-    assert!(pool.settled);
-    assert_eq!(pool.winning_outcome, Some(1u32));
+    assert_eq!(pool.status, PoolStatus::Settled(1));
 }
 
 /// F5: get_delegated_settler returns the assigned settler.
@@ -1254,4 +1252,46 @@ fn f6_get_delegated_settler_returns_none_when_unset() {
 
     let stored = t.client.get_delegated_settler(&pool_id);
     assert!(stored.is_none());
+}
+
+// ── Issue #161: void-and-refund flow ─────────────────────────────────────────
+
+/// Void a pool with users on both sides; each user reclaims their exact stake.
+#[test]
+fn void_and_refund_returns_original_stakes() {
+    let t = setup();
+    let pool_id = make_pool(&t);
+
+    let user1 = Address::generate(&t.env);
+    let user2 = Address::generate(&t.env);
+    let token_admin = soroban_sdk::token::StellarAssetClient::new(&t.env, &t.token);
+    token_admin.mint(&user1, &500);
+    token_admin.mint(&user2, &300);
+
+    t.client.place_bet(&user1, &pool_id, &0, &500);
+    t.client.place_bet(&user2, &pool_id, &1, &300);
+
+    t.client.void_pool(&t.admin, &pool_id);
+
+    let pool = t.client.get_pool(&pool_id).unwrap();
+    assert_eq!(pool.status, super::PoolStatus::Voided);
+
+    let token = soroban_sdk::token::Client::new(&t.env, &t.token);
+    assert_eq!(t.client.claim_refund(&user1, &pool_id), 500);
+    assert_eq!(token.balance(&user1), 500);
+
+    assert_eq!(t.client.claim_refund(&user2, &pool_id), 300);
+    assert_eq!(token.balance(&user2), 300);
+}
+
+/// claim_winnings on a voided pool must be rejected.
+#[test]
+#[should_panic(expected = "Pool is voided; use claim_refund")]
+fn claim_winnings_rejected_on_voided_pool() {
+    let t = setup();
+    let pool_id = make_pool(&t);
+
+    t.client.place_bet(&t.user, &pool_id, &0, &200);
+    t.client.void_pool(&t.admin, &pool_id);
+    t.client.claim_winnings(&t.user, &pool_id);
 }

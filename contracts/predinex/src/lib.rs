@@ -13,23 +13,31 @@ pub enum DataKey {
     Treasury,
     TreasuryRecipient,
     DelegatedSettler(u32),
+    FreezeAdmin,
 }
 
 /// Explicit lifecycle status for a prediction pool.
 ///
 /// Transitions:
 ///   Open  ──(expiry reached + settle_pool called)──►  Settled(winning_outcome)
+///   Open  ──(void_pool called by creator)──────────►  Voided
 ///
-/// Future terminal states (Cancelled, Voided, Paused) can be added here
-/// without ambiguity, because status is the single source of truth.
-#[derive(Clone, PartialEq)]
+/// Terminal states are mutually exclusive; status is the single source of truth.
+#[derive(Clone, PartialEq, Debug)]
 #[contracttype]
 pub enum PoolStatus {
     /// Accepting bets; expiry has not yet passed.
     Open,
+    /// Alias for Open — kept for backward compatibility with older storage entries.
+    Active,
     /// Betting closed and a winning outcome has been declared.
-    /// The inner value is the winning outcome index (0 or 1).
     Settled(u32),
+    /// Pool was declared unresolvable; users may claim full refunds via `claim_refund`.
+    Voided,
+    /// Pool is frozen by the freeze admin; bets and claims are blocked pending review.
+    Frozen,
+    /// Pool settlement is under dispute; claims are blocked pending resolution.
+    Disputed,
 }
 
 #[derive(Clone)]
@@ -166,7 +174,7 @@ impl PredinexContract {
             winning_outcome: None,
             created_at,
             expiry,
-            status: PoolStatus::Active,
+            status: PoolStatus::Open,
         };
 
         env.storage()
@@ -197,10 +205,6 @@ impl PredinexContract {
 
         if pool.status != PoolStatus::Open {
             panic!("Pool already settled");
-        }
-
-        if pool.status != PoolStatus::Active {
-            panic!("Pool is not active");
         }
 
         if env.ledger().timestamp() >= pool.expiry {
@@ -347,6 +351,84 @@ impl PredinexContract {
         );
     }
 
+    /// Mark a pool as void. Only the creator may call this before the pool is
+    /// settled or already voided. Once voided, users call `claim_refund` to
+    /// recover their original stakes in full.
+    pub fn void_pool(env: Env, caller: Address, pool_id: u32) {
+        caller.require_auth();
+
+        let mut pool = env
+            .storage()
+            .persistent()
+            .get::<_, Pool>(&DataKey::Pool(pool_id))
+            .expect("Pool not found");
+
+        if caller != pool.creator {
+            panic!("Unauthorized");
+        }
+
+        match pool.status {
+            PoolStatus::Open => {}
+            PoolStatus::Voided => panic!("Already voided"),
+            _ => panic!("Pool already settled"),
+        }
+
+        pool.status = PoolStatus::Voided;
+        env.storage()
+            .persistent()
+            .set(&DataKey::Pool(pool_id), &pool);
+
+        env.events()
+            .publish((Symbol::new(&env, "void_pool"), pool_id), caller);
+    }
+
+    /// Refund a user's original stake from a voided pool. No fee is taken.
+    /// The bet entry is removed after the refund to prevent double-claims.
+    pub fn claim_refund(env: Env, user: Address, pool_id: u32) -> i128 {
+        user.require_auth();
+
+        let pool = env
+            .storage()
+            .persistent()
+            .get::<_, Pool>(&DataKey::Pool(pool_id))
+            .expect("Pool not found");
+
+        if pool.status != PoolStatus::Voided {
+            panic!("Pool not voided");
+        }
+
+        let user_bet = env
+            .storage()
+            .persistent()
+            .get::<_, UserBet>(&DataKey::UserBet(pool_id, user.clone()))
+            .expect("No bet found");
+
+        let refund = user_bet.total_bet;
+        if refund == 0 {
+            panic!("Nothing to refund");
+        }
+
+        let token_address = env
+            .storage()
+            .persistent()
+            .get::<_, Address>(&DataKey::Token)
+            .expect("Not initialized");
+        let token_client = token::Client::new(&env, &token_address);
+
+        token_client.transfer(&env.current_contract_address(), &user, &refund);
+
+        env.storage()
+            .persistent()
+            .remove(&DataKey::UserBet(pool_id, user.clone()));
+
+        env.events().publish(
+            (Symbol::new(&env, "claim_refund"), pool_id, user),
+            refund,
+        );
+
+        refund
+    }
+
     pub fn claim_winnings(env: Env, user: Address, pool_id: u32) -> i128 {
         user.require_auth();
 
@@ -358,12 +440,10 @@ impl PredinexContract {
 
         let winning_outcome = match pool.status {
             PoolStatus::Settled(outcome) => outcome,
+            PoolStatus::Voided => panic!("Pool is voided; use claim_refund"),
+            PoolStatus::Frozen | PoolStatus::Disputed => panic!("Pool is frozen or disputed; claims are blocked"),
             _ => panic!("Pool not settled"),
         };
-
-        if pool.status != PoolStatus::Active {
-            panic!("Pool is frozen or disputed; claims are blocked");
-        }
 
         let user_bet = env
             .storage()
@@ -553,7 +633,7 @@ impl PredinexContract {
             .get::<_, Pool>(&DataKey::Pool(pool_id))
             .expect("Pool not found");
 
-        if !pool.settled {
+        if !matches!(pool.status, PoolStatus::Settled(_)) {
             panic!("Pool must be settled before it can be disputed");
         }
 
@@ -585,11 +665,11 @@ impl PredinexContract {
             .get::<_, Pool>(&DataKey::Pool(pool_id))
             .expect("Pool not found");
 
-        if pool.status == PoolStatus::Active {
+        if pool.status != PoolStatus::Frozen && pool.status != PoolStatus::Disputed {
             panic!("Pool is not frozen or disputed");
         }
 
-        pool.status = PoolStatus::Active;
+        pool.status = PoolStatus::Open;
         env.storage()
             .persistent()
             .set(&DataKey::Pool(pool_id), &pool);
