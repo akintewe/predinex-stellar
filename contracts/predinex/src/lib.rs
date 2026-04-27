@@ -29,7 +29,7 @@ pub enum DataKey {
 // bound for most markets; operators running longer markets should call
 // bump-only maintenance transactions before the threshold is reached.
 const LEDGERS_PER_DAY: u32 = 17_280;
-const POOL_BUMP_TARGET: u32 = LEDGERS_PER_DAY * 30;    // extend to 30 days
+const POOL_BUMP_TARGET: u32 = LEDGERS_PER_DAY * 30; // extend to 30 days
 const POOL_BUMP_THRESHOLD: u32 = LEDGERS_PER_DAY * 25; // trigger bump when < 25 days remain
 
 /// Explicit lifecycle status for a prediction pool.
@@ -221,7 +221,7 @@ impl PredinexContract {
         let mut i = start;
         while i < end {
             let b = buf[i];
-            let lower = if b >= b'A' && b <= b'Z' { b + 32 } else { b };
+            let lower = if b.is_ascii_uppercase() { b + 32 } else { b };
             result.push_back(lower);
             i += 1;
         }
@@ -301,8 +301,10 @@ impl PredinexContract {
             .persistent()
             .set(&DataKey::PoolCounter, &(pool_id + 1));
 
-        env.events()
-            .publish((Symbol::new(&env, "create_pool"), pool_id), (creator, Symbol::new(&env, "Open")));
+        env.events().publish(
+            (Symbol::new(&env, "create_pool"), pool_id),
+            (creator, Symbol::new(&env, "Open")),
+        );
 
         pool_id
     }
@@ -507,7 +509,11 @@ impl PredinexContract {
         pool.winning_outcome = Some(winning_outcome);
 
         // #171 — compute totals for the enriched settlement event.
-        let winning_side_total = if winning_outcome == 0 { pool.total_a } else { pool.total_b };
+        let winning_side_total = if winning_outcome == 0 {
+            pool.total_a
+        } else {
+            pool.total_b
+        };
         let total_pool_volume = pool.total_a + pool.total_b;
         let fee_amount = (total_pool_volume * 2) / 100;
 
@@ -523,7 +529,13 @@ impl PredinexContract {
 
         env.events().publish(
             (Symbol::new(&env, "settle_pool"), pool_id),
-            (caller, winning_outcome, winning_side_total, total_pool_volume, fee_amount),
+            (
+                caller,
+                winning_outcome,
+                winning_side_total,
+                total_pool_volume,
+                fee_amount,
+            ),
         );
     }
 
@@ -604,10 +616,8 @@ impl PredinexContract {
             .persistent()
             .remove(&DataKey::UserBet(pool_id, user.clone()));
 
-        env.events().publish(
-            (Symbol::new(&env, "claim_refund"), pool_id, user),
-            refund,
-        );
+        env.events()
+            .publish((Symbol::new(&env, "claim_refund"), pool_id, user), refund);
 
         refund
     }
@@ -810,10 +820,8 @@ impl PredinexContract {
             .persistent()
             .set(&DataKey::FreezeAdmin, &freeze_admin);
 
-        env.events().publish(
-            (Symbol::new(&env, "freeze_admin_set"),),
-            freeze_admin,
-        );
+        env.events()
+            .publish((Symbol::new(&env, "freeze_admin_set"),), freeze_admin);
     }
 
     /// Freeze a pool, blocking new bets and claim payouts.
@@ -990,11 +998,9 @@ impl PredinexContract {
             let key = DataKey::UserBet(pool_id, user.clone());
             if let Some(bet) = env.storage().persistent().get::<_, UserBet>(&key) {
                 // #189 — extend position TTL on read so dashboard queries keep entries alive.
-                env.storage().persistent().extend_ttl(
-                    &key,
-                    POOL_BUMP_THRESHOLD,
-                    POOL_BUMP_TARGET,
-                );
+                env.storage()
+                    .persistent()
+                    .extend_ttl(&key, POOL_BUMP_THRESHOLD, POOL_BUMP_TARGET);
                 result.push_back(UserPoolPosition {
                     pool_id,
                     amount_a: bet.amount_a,
@@ -1030,11 +1036,9 @@ impl PredinexContract {
         let key = DataKey::UserBet(pool_id, user);
         let bet: Option<UserBet> = env.storage().persistent().get(&key);
         if bet.is_some() {
-            env.storage().persistent().extend_ttl(
-                &key,
-                POOL_BUMP_THRESHOLD,
-                POOL_BUMP_TARGET,
-            );
+            env.storage()
+                .persistent()
+                .extend_ttl(&key, POOL_BUMP_THRESHOLD, POOL_BUMP_TARGET);
         }
         bet
     }
@@ -1078,7 +1082,11 @@ impl PredinexContract {
             PoolStatus::Settled(winning_outcome) => match bet {
                 None => ClaimStatus::AlreadyClaimed,
                 Some(b) => {
-                    let winning_stake = if winning_outcome == 0 { b.amount_a } else { b.amount_b };
+                    let winning_stake = if winning_outcome == 0 {
+                        b.amount_a
+                    } else {
+                        b.amount_b
+                    };
                     if winning_stake > 0 {
                         ClaimStatus::Claimable
                     } else {

@@ -798,7 +798,11 @@ fn b5_settle_pool_winning_outcome_0_is_valid() {
     t.client.settle_pool(&t.admin, &pool_id, &0u32);
 
     let pool = t.client.get_pool(&pool_id).expect("pool must exist");
-    assert_eq!(pool.status, PoolStatus::Settled(0), "status must be Settled(0)");
+    assert_eq!(
+        pool.status,
+        PoolStatus::Settled(0),
+        "status must be Settled(0)"
+    );
 }
 
 /// B6: winning_outcome == 1 settles correctly (boundary — highest valid).
@@ -812,7 +816,11 @@ fn b6_settle_pool_winning_outcome_1_is_valid() {
     t.client.settle_pool(&t.admin, &pool_id, &1u32);
 
     let pool = t.client.get_pool(&pool_id).expect("pool must exist");
-    assert_eq!(pool.status, PoolStatus::Settled(1), "status must be Settled(1)");
+    assert_eq!(
+        pool.status,
+        PoolStatus::Settled(1),
+        "status must be Settled(1)"
+    );
 }
 
 // ============================================================================
@@ -1277,7 +1285,9 @@ fn g1_treasury_recipient_can_be_rotated() {
     client.initialize(&token_id.address(), &original_recipient);
 
     // Verify original recipient is set
-    let current = client.get_treasury_recipient().expect("recipient must be set");
+    let current = client
+        .get_treasury_recipient()
+        .expect("recipient must be set");
     assert_eq!(current, original_recipient);
 
     // Rotate to new recipient
@@ -1285,7 +1295,9 @@ fn g1_treasury_recipient_can_be_rotated() {
     client.rotate_treasury_recipient(&original_recipient, &new_recipient);
 
     // Verify new recipient is now set
-    let updated = client.get_treasury_recipient().expect("recipient must be set");
+    let updated = client
+        .get_treasury_recipient()
+        .expect("recipient must be set");
     assert_eq!(updated, new_recipient);
 }
 
@@ -1367,7 +1379,10 @@ fn g3_after_rotation_only_new_recipient_can_withdraw() {
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         client.withdraw_treasury(&original_recipient, &treasury_balance);
     }));
-    assert!(result.is_err(), "old recipient should not be able to withdraw");
+    assert!(
+        result.is_err(),
+        "old recipient should not be able to withdraw"
+    );
 
     // New recipient should be able to withdraw
     client.withdraw_treasury(&new_recipient, &treasury_balance);
@@ -1397,7 +1412,9 @@ fn g4_rotation_emits_event_with_old_and_new_addresses() {
 
     // Event verification would be done through event inspection in production
     // For this test, we verify the state change occurred
-    let updated = client.get_treasury_recipient().expect("recipient must be set");
+    let updated = client
+        .get_treasury_recipient()
+        .expect("recipient must be set");
     assert_eq!(updated, new_recipient);
 }
 
@@ -1423,14 +1440,18 @@ fn g5_multiple_rotations_work_correctly() {
     client.rotate_treasury_recipient(&recipient2, &recipient3);
 
     // Verify final recipient is set
-    let final_recipient = client.get_treasury_recipient().expect("recipient must be set");
+    let final_recipient = client
+        .get_treasury_recipient()
+        .expect("recipient must be set");
     assert_eq!(final_recipient, recipient3);
 
     // Verify only final recipient can rotate
     let recipient4 = Address::generate(&env);
     client.rotate_treasury_recipient(&recipient3, &recipient4);
 
-    let updated = client.get_treasury_recipient().expect("recipient must be set");
+    let updated = client
+        .get_treasury_recipient()
+        .expect("recipient must be set");
     assert_eq!(updated, recipient4);
 }
 
@@ -1688,7 +1709,9 @@ fn test_settle_pool_event_includes_totals_and_fee() {
     client.place_bet(&user_a, &pool_id, &0, &300);
     client.place_bet(&user_b, &pool_id, &1, &100);
 
-    env.ledger().with_mut(|li| { li.timestamp = 3601; });
+    env.ledger().with_mut(|li| {
+        li.timestamp = 3601;
+    });
 
     client.settle_pool(&creator, &pool_id, &0);
 
@@ -1700,9 +1723,13 @@ fn test_settle_pool_event_includes_totals_and_fee() {
     let winnings = client.claim_winnings(&user_a, &pool_id);
     let fee = (400i128 * 2) / 100;
     let net = 400 - fee; // 392
-    // user_a staked 300 / 300 of the winning side → full net pool
+                         // user_a staked 300 / 300 of the winning side → full net pool
     assert_eq!(winnings, net, "claim should equal net pool after 2% fee");
-    assert_eq!(client.get_treasury_balance(), fee, "treasury must hold exactly the fee");
+    assert_eq!(
+        client.get_treasury_balance(),
+        fee,
+        "treasury must hold exactly the fee"
+    );
 }
 
 /// The event payload for outcome 1 (side B) carries the correct totals.
@@ -1740,7 +1767,9 @@ fn test_settle_pool_event_outcome_b_totals() {
     client.place_bet(&user_a, &pool_id, &0, &200);
     client.place_bet(&user_b, &pool_id, &1, &600);
 
-    env.ledger().with_mut(|li| { li.timestamp = 3601; });
+    env.ledger().with_mut(|li| {
+        li.timestamp = 3601;
+    });
 
     // Settle with outcome 1 — winning_side_total should be total_b = 600
     client.settle_pool(&creator, &pool_id, &1);
@@ -1748,7 +1777,7 @@ fn test_settle_pool_event_outcome_b_totals() {
     let winnings = client.claim_winnings(&user_b, &pool_id);
     let total_volume = 800i128;
     let fee = (total_volume * 2) / 100; // 16
-    let net = total_volume - fee;       // 784
+    let net = total_volume - fee; // 784
     assert_eq!(winnings, net);
     assert_eq!(client.get_treasury_balance(), fee);
 }
@@ -1893,26 +1922,41 @@ fn claim_status_winner_transitions() {
     token_admin.mint(&loser, &500);
 
     // Before any bet: NeverBet
-    assert_eq!(t.client.get_claim_status(&pool_id, &winner), super::ClaimStatus::NeverBet);
+    assert_eq!(
+        t.client.get_claim_status(&pool_id, &winner),
+        super::ClaimStatus::NeverBet
+    );
 
     t.client.place_bet(&winner, &pool_id, &0, &300); // outcome A
-    t.client.place_bet(&loser, &pool_id, &1, &200);  // outcome B
+    t.client.place_bet(&loser, &pool_id, &1, &200); // outcome B
 
     // After bet, pool still open: NotEligible (no claim available yet)
-    assert_eq!(t.client.get_claim_status(&pool_id, &winner), super::ClaimStatus::NotEligible);
+    assert_eq!(
+        t.client.get_claim_status(&pool_id, &winner),
+        super::ClaimStatus::NotEligible
+    );
 
     expire_pool(&t.env);
     t.client.settle_pool(&t.admin, &pool_id, &0); // A wins
 
     // After settlement, winner: Claimable
-    assert_eq!(t.client.get_claim_status(&pool_id, &winner), super::ClaimStatus::Claimable);
+    assert_eq!(
+        t.client.get_claim_status(&pool_id, &winner),
+        super::ClaimStatus::Claimable
+    );
     // After settlement, loser: NotEligible
-    assert_eq!(t.client.get_claim_status(&pool_id, &loser), super::ClaimStatus::NotEligible);
+    assert_eq!(
+        t.client.get_claim_status(&pool_id, &loser),
+        super::ClaimStatus::NotEligible
+    );
 
     t.client.claim_winnings(&winner, &pool_id);
 
     // After claim: AlreadyClaimed
-    assert_eq!(t.client.get_claim_status(&pool_id, &winner), super::ClaimStatus::AlreadyClaimed);
+    assert_eq!(
+        t.client.get_claim_status(&pool_id, &winner),
+        super::ClaimStatus::AlreadyClaimed
+    );
 }
 
 /// Losing bettor status is NotEligible, distinct from NeverBet.
@@ -1927,14 +1971,16 @@ fn claim_status_loser_is_not_eligible_not_never_bet() {
     token_admin.mint(&loser, &100);
     token_admin.mint(&winner, &100);
 
-    t.client.place_bet(&loser, &pool_id, &1, &100);  // outcome B
+    t.client.place_bet(&loser, &pool_id, &1, &100); // outcome B
     t.client.place_bet(&winner, &pool_id, &0, &100); // outcome A
 
     expire_pool(&t.env);
     t.client.settle_pool(&t.admin, &pool_id, &0); // A wins
 
     let loser_status = t.client.get_claim_status(&pool_id, &loser);
-    let never_bet_status = t.client.get_claim_status(&pool_id, &Address::generate(&t.env));
+    let never_bet_status = t
+        .client
+        .get_claim_status(&pool_id, &Address::generate(&t.env));
 
     assert_eq!(loser_status, super::ClaimStatus::NotEligible);
     assert_eq!(never_bet_status, super::ClaimStatus::AlreadyClaimed); // settled pool, no record
@@ -1954,11 +2000,17 @@ fn claim_status_voided_pool_transitions() {
     t.client.place_bet(&user, &pool_id, &0, &200);
     t.client.void_pool(&t.admin, &pool_id);
 
-    assert_eq!(t.client.get_claim_status(&pool_id, &user), super::ClaimStatus::RefundClaimable);
+    assert_eq!(
+        t.client.get_claim_status(&pool_id, &user),
+        super::ClaimStatus::RefundClaimable
+    );
 
     t.client.claim_refund(&user, &pool_id);
 
-    assert_eq!(t.client.get_claim_status(&pool_id, &user), super::ClaimStatus::AlreadyClaimed);
+    assert_eq!(
+        t.client.get_claim_status(&pool_id, &user),
+        super::ClaimStatus::AlreadyClaimed
+    );
 }
 
 // ── Issue #186: treasury withdrawal amount validation ─────────────────────────
@@ -2007,7 +2059,10 @@ fn treasury_withdraw_positive_succeeds() {
     let (t, _) = setup_with_treasury();
 
     let before = t.client.get_treasury_balance();
-    assert!(before > 0, "treasury must have a balance after fee collection");
+    assert!(
+        before > 0,
+        "treasury must have a balance after fee collection"
+    );
 
     t.client.withdraw_treasury(&t.admin, &before);
 
@@ -2033,7 +2088,10 @@ fn i1_cancel_pool_before_bets_succeeds() {
 
     t.client.cancel_pool(&t.admin, &pool_id);
 
-    let pool_after = t.client.get_pool(&pool_id).expect("pool must still exist after cancel");
+    let pool_after = t
+        .client
+        .get_pool(&pool_id)
+        .expect("pool must still exist after cancel");
     assert_eq!(
         pool_after.status,
         PoolStatus::Cancelled,
@@ -2072,7 +2130,10 @@ fn i4_cancelled_pool_record_is_retained() {
     t.client.cancel_pool(&t.admin, &pool_id);
 
     let pool = t.client.get_pool(&pool_id);
-    assert!(pool.is_some(), "pool record must still exist after cancellation");
+    assert!(
+        pool.is_some(),
+        "pool record must still exist after cancellation"
+    );
     assert_eq!(pool.unwrap().status, PoolStatus::Cancelled);
 }
 
@@ -2132,7 +2193,10 @@ fn j1_get_user_pools_returns_correct_pools() {
 
     assert_eq!(positions.len(), 2, "must find exactly 2 positions");
     assert!(pool_ids.contains(pool_a), "pool_a must be in results");
-    assert!(!pool_ids.contains(pool_b), "pool_b must not appear — user never bet");
+    assert!(
+        !pool_ids.contains(pool_b),
+        "pool_b must not appear — user never bet"
+    );
     assert!(pool_ids.contains(pool_c), "pool_c must be in results");
 }
 
@@ -2162,7 +2226,11 @@ fn j3_get_user_pools_returns_empty_when_no_bets() {
     let pool_id = make_pool(&t);
     // User never bets
     let positions = t.client.get_user_pools(&t.user, &pool_id, &5u32);
-    assert_eq!(positions.len(), 0, "must return empty when user has no bets in range");
+    assert_eq!(
+        positions.len(),
+        0,
+        "must return empty when user has no bets in range"
+    );
 }
 
 /// J4: Claimed positions do not appear in subsequent scans.
@@ -2241,7 +2309,10 @@ fn k1_pool_ttl_is_extended_on_create() {
     // create_pool internally calls extend_ttl — verify no panic occurs.
     let pool_id = make_pool(&t);
     let pool = t.client.get_pool(&pool_id);
-    assert!(pool.is_some(), "pool must be readable after creation with TTL bump");
+    assert!(
+        pool.is_some(),
+        "pool must be readable after creation with TTL bump"
+    );
 }
 
 /// K2: Placing a bet extends both pool and user-position TTLs (no panic).
@@ -2271,7 +2342,10 @@ fn k3_pool_ttl_extended_on_settle() {
     t.client.settle_pool(&t.admin, &pool_id, &0u32);
 
     let pool = t.client.get_pool(&pool_id);
-    assert!(pool.is_some(), "pool must remain readable after settlement TTL bump");
+    assert!(
+        pool.is_some(),
+        "pool must remain readable after settlement TTL bump"
+    );
 }
 
 /// K4: get_user_bet read path extends the TTL of the returned entry.
@@ -2379,7 +2453,9 @@ fn l3_loser_claim_leaves_balances_unchanged() {
     client.place_bet(&winner, &pool_id, &0, &300);
     client.place_bet(&loser, &pool_id, &1, &200);
 
-    env.ledger().with_mut(|li| { li.timestamp = 3601; });
+    env.ledger().with_mut(|li| {
+        li.timestamp = 3601;
+    });
     client.settle_pool(&creator, &pool_id, &0);
 
     let treasury_before = client.get_treasury_balance();
@@ -2393,15 +2469,18 @@ fn l3_loser_claim_leaves_balances_unchanged() {
     assert!(result.is_err(), "loser claim must panic");
 
     assert_eq!(
-        client.get_treasury_balance(), treasury_before,
+        client.get_treasury_balance(),
+        treasury_before,
         "treasury must be unchanged after loser's failed claim"
     );
     assert_eq!(
-        token.balance(&loser), loser_balance_before,
+        token.balance(&loser),
+        loser_balance_before,
         "loser token balance must be unchanged"
     );
     assert_eq!(
-        token.balance(&contract_id), contract_balance_before,
+        token.balance(&contract_id),
+        contract_balance_before,
         "contract token balance must be unchanged"
     );
 }
@@ -2442,7 +2521,9 @@ fn l4_successful_claim_reconciles_treasury_and_balances() {
     client.place_bet(&user_a, &pool_id, &0, &300);
     client.place_bet(&user_b, &pool_id, &1, &200);
 
-    env.ledger().with_mut(|li| { li.timestamp = 3601; });
+    env.ledger().with_mut(|li| {
+        li.timestamp = 3601;
+    });
     client.settle_pool(&creator, &pool_id, &0); // A wins
 
     let contract_balance_before = token.balance(&contract_id);
@@ -2452,9 +2533,13 @@ fn l4_successful_claim_reconciles_treasury_and_balances() {
     let expected_fee = (500i128 * 2) / 100;
     let expected_winnings = 500 - expected_fee;
 
-    assert_eq!(winnings, expected_winnings, "winnings must equal net pool after fee");
     assert_eq!(
-        client.get_treasury_balance(), expected_fee,
+        winnings, expected_winnings,
+        "winnings must equal net pool after fee"
+    );
+    assert_eq!(
+        client.get_treasury_balance(),
+        expected_fee,
         "treasury must hold exactly the fee"
     );
     assert_eq!(
